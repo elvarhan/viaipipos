@@ -8,11 +8,12 @@ import {
   INITIAL_PRODUCTS,
   INITIAL_TRANSACTIONS
 } from '../data/initialData';
+import { db, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from '../firebase';
 
 const PosContext = createContext();
 
 export const PosProvider = ({ children }) => {
-  // Theme State (Default: light clean white with emerald green)
+  // Theme State
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('nusapos_theme') || 'light';
   });
@@ -26,7 +27,7 @@ export const PosProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : INITIAL_BRANCHES;
   });
 
-  const [activeBranch, setActiveBranch] = useState('all'); // 'all' or branchId
+  const [activeBranch, setActiveBranch] = useState('all');
 
   const [users, setUsers] = useState(() => {
     const saved = localStorage.getItem('nusapos_users');
@@ -39,10 +40,8 @@ export const PosProvider = ({ children }) => {
 
   const [activeRole, setActiveRole] = useState(() => activeUser?.role || 'Owner');
 
-  // Categories State
+  // Categories & Products State
   const [categories, setCategories] = useState(() => INITIAL_CATEGORIES);
-
-  // Products State (Cafe Menu)
   const [products, setProducts] = useState(() => INITIAL_PRODUCTS);
 
   // Tables State
@@ -62,7 +61,7 @@ export const PosProvider = ({ children }) => {
   const [selectedCategory, setSelectedCategory] = useState('all');
 
   // Order Details POS
-  const [orderType, setOrderType] = useState('Dine In'); // 'Dine In' | 'Take Away'
+  const [orderType, setOrderType] = useState('Dine In');
   const [selectedTable, setSelectedTable] = useState('tbl-01');
   const [selectedCustomer, setSelectedCustomer] = useState('cust-general');
 
@@ -71,7 +70,7 @@ export const PosProvider = ({ children }) => {
   const [cartDiscount, setCartDiscount] = useState(0);
   const [heldCarts, setHeldCarts] = useState([]);
 
-  // Self-Ordering Customer Queue (Pending Confirmation by Cashier)
+  // Self-Ordering Customer Queue
   const [pendingSelfOrders, setPendingSelfOrders] = useState(() => [
     {
       id: 'QR-ORD-101',
@@ -92,7 +91,7 @@ export const PosProvider = ({ children }) => {
     }
   ]);
 
-  // Transactions History (Contains KDS / BDS Order Queue)
+  // Transactions History
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem('nusapos_transactions');
     return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
@@ -102,9 +101,48 @@ export const PosProvider = ({ children }) => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showHoldCartModal, setShowHoldCartModal] = useState(false);
   const [activeReceipt, setActiveReceipt] = useState(null);
-
-  // Toast Feedback State
   const [toasts, setToasts] = useState([]);
+
+  // Firebase Realtime Listener Sync (Firestore)
+  useEffect(() => {
+    if (!db) return;
+
+    // Listen to Firebase Products
+    const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
+      if (!snapshot.empty) {
+        const firebaseProds = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        setProducts(firebaseProds);
+      }
+    }, (err) => {
+      console.log('Firebase Products Sync Notice:', err.message);
+    });
+
+    // Listen to Firebase Transactions
+    const unsubTrx = onSnapshot(collection(db, 'transactions'), (snapshot) => {
+      if (!snapshot.empty) {
+        const firebaseTrx = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        setTransactions(firebaseTrx);
+      }
+    }, (err) => {
+      console.log('Firebase Transactions Sync Notice:', err.message);
+    });
+
+    // Listen to Firebase Self Orders
+    const unsubSelfOrders = onSnapshot(collection(db, 'pending_self_orders'), (snapshot) => {
+      if (!snapshot.empty) {
+        const firebaseSelfOrders = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        setPendingSelfOrders(firebaseSelfOrders);
+      }
+    }, (err) => {
+      console.log('Firebase Self Orders Sync Notice:', err.message);
+    });
+
+    return () => {
+      unsubProducts();
+      unsubTrx();
+      unsubSelfOrders();
+    };
+  }, []);
 
   // Persistence to LocalStorage
   useEffect(() => {
@@ -116,28 +154,12 @@ export const PosProvider = ({ children }) => {
   }, [users]);
 
   useEffect(() => {
-    localStorage.setItem('nusapos_categories', JSON.stringify(categories));
-  }, [categories]);
-
-  useEffect(() => {
-    localStorage.setItem('nusapos_products', JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
     localStorage.setItem('nusapos_tables', JSON.stringify(tables));
   }, [tables]);
 
   useEffect(() => {
     localStorage.setItem('nusapos_customers', JSON.stringify(customers));
   }, [customers]);
-
-  useEffect(() => {
-    localStorage.setItem('nusapos_self_orders', JSON.stringify(pendingSelfOrders));
-  }, [pendingSelfOrders]);
-
-  useEffect(() => {
-    localStorage.setItem('nusapos_transactions', JSON.stringify(transactions));
-  }, [transactions]);
 
   useEffect(() => {
     localStorage.setItem('nusapos_theme', theme);
@@ -153,66 +175,228 @@ export const PosProvider = ({ children }) => {
     }, 3000);
   };
 
-  // Switch User Role helper
+  // Role Switcher
   const handleRoleChange = (role) => {
     setActiveRole(role);
     const matchedUser = users.find(u => u.role === role) || activeUser;
     setActiveUser(matchedUser);
-    showToast(`Beralih ke Peran: ${role}`, 'info');
+    showToast(`Beralih ke Role ${role}`, 'info');
   };
 
-  // Cart Actions
+  // Branch CRUD
+  const addBranch = async (branchData) => {
+    const newBranch = {
+      id: `cabang-0${branches.length + 1}`,
+      ...branchData
+    };
+    setBranches(prev => [...prev, newBranch]);
+
+    try {
+      await setDoc(doc(db, 'branches', newBranch.id), newBranch);
+    } catch (e) {
+      console.log('Firebase branch sync:', e);
+    }
+
+    showToast(`Cabang ${newBranch.name} Berhasil Ditambahkan`, 'success');
+  };
+
+  const updateBranch = async (updatedBranch) => {
+    setBranches(prev => prev.map(b => b.id === updatedBranch.id ? updatedBranch : b));
+
+    try {
+      await updateDoc(doc(db, 'branches', updatedBranch.id), updatedBranch);
+    } catch (e) {
+      console.log('Firebase branch update:', e);
+    }
+
+    showToast(`Cabang ${updatedBranch.name} Berhasil Diperbarui`, 'success');
+  };
+
+  const deleteBranch = async (branchId) => {
+    setBranches(prev => prev.filter(b => b.id !== branchId));
+
+    try {
+      await deleteDoc(doc(db, 'branches', branchId));
+    } catch (e) {
+      console.log('Firebase branch delete:', e);
+    }
+
+    showToast('Cabang Berhasil Dihapus', 'warning');
+  };
+
+  // Categories CRUD
+  const addCategory = (categoryData) => {
+    const newCat = {
+      id: categoryData.name.toLowerCase().replace(/\s+/g, '-'),
+      ...categoryData
+    };
+    setCategories(prev => [...prev, newCat]);
+    showToast(`Kategori ${newCat.name} Ditambahkan`, 'success');
+  };
+
+  const deleteCategory = (catId) => {
+    setCategories(prev => prev.filter(c => c.id !== catId));
+    showToast('Kategori Dihapus', 'warning');
+  };
+
+  // Products CRUD
+  const addProduct = async (productData) => {
+    const newProd = {
+      id: `prod-${Date.now()}`,
+      ...productData,
+      branchId: activeBranch === 'all' ? 'all' : activeBranch
+    };
+    setProducts(prev => [newProd, ...prev]);
+
+    try {
+      await setDoc(doc(db, 'products', newProd.id), newProd);
+    } catch (e) {
+      console.log('Firebase add product:', e);
+    }
+
+    showToast(`Menu ${newProd.name} Berhasil Ditambahkan`, 'success');
+  };
+
+  const updateProduct = async (updatedProd) => {
+    setProducts(prev => prev.map(p => p.id === updatedProd.id ? updatedProd : p));
+
+    try {
+      await updateDoc(doc(db, 'products', updatedProd.id), updatedProd);
+    } catch (e) {
+      console.log('Firebase update product:', e);
+    }
+
+    showToast(`Menu ${updatedProd.name} Berhasil Diperbarui`, 'success');
+  };
+
+  const deleteProduct = async (productId) => {
+    setProducts(prev => prev.filter(p => p.id !== productId));
+
+    try {
+      await deleteDoc(doc(db, 'products', productId));
+    } catch (e) {
+      console.log('Firebase delete product:', e);
+    }
+
+    showToast('Menu Berhasil Dihapus', 'warning');
+  };
+
+  // Tables CRUD
+  const addTable = (tableData) => {
+    const newTable = {
+      id: `tbl-${Date.now()}`,
+      ...tableData,
+      qrCode: `QR-MEJA-${tableData.number.replace(/\s+/g, '')}`
+    };
+    setTables(prev => [...prev, newTable]);
+    showToast(`${newTable.number} Ditambahkan`, 'success');
+  };
+
+  const updateTable = (updatedTable) => {
+    setTables(prev => prev.map(t => t.id === updatedTable.id ? updatedTable : t));
+    showToast(`${updatedTable.number} Diperbarui`, 'success');
+  };
+
+  const deleteTable = (tableId) => {
+    setTables(prev => prev.filter(t => t.id !== tableId));
+    showToast('Meja Dihapus', 'warning');
+  };
+
+  // Customers CRUD
+  const addCustomer = (customerData) => {
+    const newCust = {
+      id: `cust-${Date.now()}`,
+      ...customerData,
+      ordersCount: 0
+    };
+    setCustomers(prev => [...prev, newCust]);
+    showToast(`Pelanggan ${newCust.name} Ditambahkan`, 'success');
+  };
+
+  const updateCustomer = (updatedCust) => {
+    setCustomers(prev => prev.map(c => c.id === updatedCust.id ? updatedCust : c));
+    showToast(`Pelanggan ${updatedCust.name} Diperbarui`, 'success');
+  };
+
+  const deleteCustomer = (custId) => {
+    setCustomers(prev => prev.filter(c => c.id !== custId));
+    showToast('Data Pelanggan Dihapus', 'warning');
+  };
+
+  // Users CRUD
+  const addUser = (userData) => {
+    const newUser = {
+      id: `user-${Date.now()}`,
+      ...userData
+    };
+    setUsers(prev => [...prev, newUser]);
+    showToast(`Staf ${newUser.name} Ditambahkan`, 'success');
+  };
+
+  const deleteUser = (userId) => {
+    setUsers(prev => prev.filter(u => u.id !== userId));
+    showToast('Pengguna Dihapus', 'warning');
+  };
+
+  // Cart Management
   const addToCart = (product) => {
     if (product.status === 'Habis' || product.stock <= 0) {
-      showToast(`Stok ${product.name} sedang habis!`, 'danger');
+      showToast(`Stok ${product.name} Habis!`, 'danger');
       return;
     }
 
     setCart(prevCart => {
-      const existing = prevCart.find(item => item.id === product.id);
-      if (existing) {
-        if (existing.qty >= product.stock) {
-          showToast(`Jumlah melebihi stok yang tersedia (${product.stock})`, 'warning');
+      const existingItem = prevCart.find(item => item.id === product.id);
+      if (existingItem) {
+        if (existingItem.qty >= product.stock) {
+          showToast(`Mencapai Batas Stok (${product.stock})`, 'warning');
           return prevCart;
         }
         return prevCart.map(item =>
           item.id === product.id ? { ...item, qty: item.qty + 1 } : item
         );
       }
-      return [...prevCart, {
-        ...product,
-        qty: 1,
-        notes: '',
-        station: product.station || 'Dapur'
-      }];
+      return [
+        ...prevCart,
+        {
+          ...product,
+          qty: 1,
+          notes: '',
+          station: product.station || 'Dapur',
+          stationStatus: 'Pending'
+        }
+      ];
     });
-    showToast(`${product.name} ditambahkan ke keranjang`, 'success');
   };
 
   const updateCartQty = (productId, delta) => {
     setCart(prevCart => {
-      return prevCart.map(item => {
-        if (item.id === productId) {
-          const newQty = item.qty + delta;
-          if (newQty <= 0) return null;
-          const targetProd = products.find(p => p.id === productId);
-          if (targetProd && newQty > targetProd.stock) {
-            showToast(`Mencapai batas stok maksimum (${targetProd.stock})`, 'warning');
-            return item;
+      return prevCart
+        .map(item => {
+          if (item.id === productId) {
+            const targetProd = products.find(p => p.id === productId);
+            const maxStock = targetProd ? targetProd.stock : 999;
+            const newQty = item.qty + delta;
+
+            if (newQty > maxStock) {
+              showToast(`Mencapai Batas Stok (${maxStock})`, 'warning');
+              return item;
+            }
+            if (newQty <= 0) return null;
+            return { ...item, qty: newQty };
           }
-          return { ...item, qty: newQty };
-        }
-        return item;
-      }).filter(Boolean);
+          return item;
+        })
+        .filter(Boolean);
     });
   };
 
-  const updateCartNotes = (productId, notes) => {
-    setCart(prevCart => prevCart.map(item => item.id === productId ? { ...item, notes } : item));
-  };
-
-  const removeFromCart = (productId) => {
-    setCart(prevCart => prevCart.filter(item => item.id !== productId));
+  const updateItemNotes = (productId, notes) => {
+    setCart(prevCart =>
+      prevCart.map(item =>
+        item.id === productId ? { ...item, notes } : item
+      )
+    );
   };
 
   const clearCart = () => {
@@ -220,91 +404,178 @@ export const PosProvider = ({ children }) => {
     setCartDiscount(0);
   };
 
-  // Hold Cart Functionality
-  const holdCurrentCart = (note = '') => {
+  // Calculations
+  const cartSubtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const cartTax = Math.round((cartSubtotal - cartDiscount) * 0.1);
+  const cartTotal = Math.max(0, cartSubtotal - cartDiscount + cartTax);
+
+  // Hold Cart
+  const holdCart = (customerNameNote = '') => {
     if (cart.length === 0) return;
-    const heldItem = {
+    const newHold = {
       id: `HOLD-${Date.now()}`,
       time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-      cart: [...cart],
+      cart,
+      subtotal: cartSubtotal,
+      discount: cartDiscount,
+      tax: cartTax,
+      total: cartTotal,
       orderType,
       selectedTable,
       selectedCustomer,
-      note: note || `Pesanan ${heldCarts.length + 1}`
+      note: customerNameNote || 'Pesanan Tertunda'
     };
-    setHeldCarts(prev => [...prev, heldItem]);
+    setHeldCarts(prev => [newHold, ...prev]);
     clearCart();
-    showToast('Keranjang berhasil disimpan sementara!', 'info');
+    showToast('Pesanan Berhasil Disimpan Sementara', 'info');
   };
 
-  const restoreCart = (heldId) => {
-    const target = heldCarts.find(h => h.id === heldId);
+  const restoreCart = (holdId) => {
+    const target = heldCarts.find(h => h.id === holdId);
     if (target) {
       setCart(target.cart);
-      if (target.orderType) setOrderType(target.orderType);
-      if (target.selectedTable) setSelectedTable(target.selectedTable);
-      if (target.selectedCustomer) setSelectedCustomer(target.selectedCustomer);
-      setHeldCarts(prev => prev.filter(h => h.id !== heldId));
-      showToast('Keranjang dipulihkan', 'success');
+      setCartDiscount(target.discount);
+      setOrderType(target.orderType);
+      setSelectedTable(target.selectedTable);
+      setSelectedCustomer(target.selectedCustomer);
+      setHeldCarts(prev => prev.filter(h => h.id !== holdId));
+      setShowHoldCartModal(false);
+      showToast('Pesanan Berhasil Dipulihkan ke Keranjang', 'success');
     }
   };
 
-  // Cart Calculations
-  const cartSubtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-  const cartTax = Math.round(cartSubtotal * 0.1); // 10% PPN
-  const cartTotal = Math.max(0, cartSubtotal + cartTax - cartDiscount);
+  const deleteHeldCart = (holdId) => {
+    setHeldCarts(prev => prev.filter(h => h.id !== holdId));
+    showToast('Pesanan Tertunda Dihapus', 'warning');
+  };
 
-  // Customer Self-Ordering Functions
-  const submitCustomerOrder = ({ customerName, tableName, orderType, items, subtotal, tax, total }) => {
-    const newSelfOrder = {
-      id: `QR-ORD-${Math.floor(100 + Math.random() * 900)}`,
-      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-      date: new Date().toISOString(),
-      customerName: customerName || 'Pelanggan QR',
-      tableName: tableName || 'Meja 01',
-      orderType: orderType || 'Dine In',
+  // Process Checkout Payment
+  const processPayment = async (paymentDetails) => {
+    if (cart.length === 0) return;
+
+    const selectedTableObj = tables.find(t => t.id === selectedTable);
+    const selectedCustObj = customers.find(c => c.id === selectedCustomer);
+    const activeBranchObj = branches.find(b => b.id === activeBranch) || branches[0];
+
+    const dateObj = new Date();
+    const formattedDateStr = `${dateObj.getFullYear()}${String(dateObj.getMonth() + 1).padStart(2, '0')}${String(dateObj.getDate()).padStart(2, '0')}`;
+    const invoiceNum = `TRX-${formattedDateStr}-${Math.floor(100 + Math.random() * 900)}`;
+
+    const newTransaction = {
+      id: invoiceNum,
+      date: dateObj.toISOString(),
       branchId: activeBranch === 'all' ? 'cabang-01' : activeBranch,
-      items: items.map(i => ({
-        ...i,
+      branchName: activeBranchObj ? activeBranchObj.name : 'Cabang Utama',
+      cashierName: paymentDetails.cashierName || activeUser.name,
+      customerName: selectedCustObj ? selectedCustObj.name : 'Pelanggan Umum',
+      tableName: selectedTableObj ? selectedTableObj.number : 'Take Away',
+      orderType,
+      items: cart.map(item => ({
+        ...item,
+        subtotal: item.price * item.qty,
         stationStatus: 'Pending'
       })),
-      subtotal,
-      tax,
-      total,
+      subtotal: cartSubtotal,
+      discount: cartDiscount,
+      tax: cartTax,
+      total: cartTotal,
+      paymentMethod: paymentDetails.paymentMethod,
+      amountPaid: paymentDetails.amountPaid,
+      change: Math.max(0, paymentDetails.amountPaid - cartTotal),
+      status: 'PROSES',
+      paymentStatus: 'LUNAS'
+    };
+
+    // Update Local Stock
+    setProducts(prevProducts =>
+      prevProducts.map(p => {
+        const itemInCart = cart.find(c => c.id === p.id);
+        if (itemInCart) {
+          const updatedStock = Math.max(0, p.stock - itemInCart.qty);
+          // Sync stock to Firebase
+          updateDoc(doc(db, 'products', p.id), { stock: updatedStock }).catch(e => console.log('Firebase stock sync:', e));
+          return {
+            ...p,
+            stock: updatedStock,
+            status: updatedStock === 0 ? 'Habis' : p.status
+          };
+        }
+        return p;
+      })
+    );
+
+    // Update Table Status
+    if (orderType === 'Dine In' && selectedTableObj) {
+      setTables(prev => prev.map(t => t.id === selectedTable ? { ...t, status: 'Terisi' } : t));
+    }
+
+    // Update Transactions & Sync Firebase
+    setTransactions(prev => [newTransaction, ...prev]);
+
+    try {
+      await setDoc(doc(db, 'transactions', newTransaction.id), newTransaction);
+    } catch (e) {
+      console.log('Firebase transaction sync:', e);
+    }
+
+    // Set Receipt Modal & Clear Cart
+    setActiveReceipt(newTransaction);
+    setShowPaymentModal(false);
+    clearCart();
+    showToast(`Transaksi ${invoiceNum} Berhasil Diselesaikan!`, 'success');
+  };
+
+  // Self-Order Customer Submit
+  const submitCustomerOrder = async (customerOrderData) => {
+    const dateObj = new Date();
+    const newOrd = {
+      id: `QR-ORD-${Math.floor(100 + Math.random() * 900)}`,
+      time: dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      date: dateObj.toISOString(),
+      customerName: customerOrderData.customerName || 'Pelanggan QR',
+      tableName: customerOrderData.tableName || 'Meja 01',
+      orderType: customerOrderData.orderType || 'Dine In',
+      branchId: activeBranch === 'all' ? 'cabang-01' : activeBranch,
+      items: customerOrderData.items,
+      subtotal: customerOrderData.subtotal,
+      tax: customerOrderData.tax,
+      total: customerOrderData.total,
       status: 'MENUNGGU_KONFIRMASI'
     };
 
-    setPendingSelfOrders(prev => [newSelfOrder, ...prev]);
-    showToast(`Pesanan ${newSelfOrder.id} berhasil dikirim ke Kasir! Menunggu konfirmasi...`, 'success');
-    return newSelfOrder;
+    setPendingSelfOrders(prev => [newOrd, ...prev]);
+
+    try {
+      await setDoc(doc(db, 'pending_self_orders', newOrd.id), newOrd);
+    } catch (e) {
+      console.log('Firebase self order sync:', e);
+    }
+
+    showToast(`Pesanan ${newOrd.id} Berhasil Dikirim ke Kasir`, 'success');
+    return newOrd;
   };
 
-  const approveCustomerOrder = (orderId, paymentMethod = 'TUNAI', amountPaid) => {
+  // Approve QR Customer Order by Cashier
+  const approveCustomerOrder = async (orderId, paymentMethod, amountPaid) => {
     const targetOrder = pendingSelfOrders.find(o => o.id === orderId);
     if (!targetOrder) return;
 
-    const currentBranchObj = branches.find(b => b.id === targetOrder.branchId) || branches[0];
-    const now = new Date();
-    const invoiceId = `TRX-${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const dateObj = new Date();
+    const formattedDateStr = `${dateObj.getFullYear()}${String(dateObj.getMonth() + 1).padStart(2, '0')}${String(dateObj.getDate()).padStart(2, '0')}`;
+    const invoiceNum = `TRX-${formattedDateStr}-${Math.floor(100 + Math.random() * 900)}`;
 
-    const newTx = {
-      id: invoiceId,
-      date: now.toISOString(),
-      branchId: currentBranchObj.id,
-      branchName: currentBranchObj.name,
-      cashierName: activeUser?.name || 'Kasir',
+    const newTransaction = {
+      id: invoiceNum,
+      date: dateObj.toISOString(),
+      branchId: targetOrder.branchId,
+      branchName: 'Cabang Utama',
+      cashierName: activeUser.name,
       customerName: targetOrder.customerName,
       tableName: targetOrder.tableName,
       orderType: targetOrder.orderType,
       items: targetOrder.items.map(item => ({
-        id: item.id,
-        sku: item.sku || 'SKU-NUSA',
-        name: item.name,
-        price: item.price,
-        qty: item.qty,
+        ...item,
         subtotal: item.price * item.qty,
-        station: item.station || 'Dapur',
-        notes: item.notes || '',
         stationStatus: 'Pending'
       })),
       subtotal: targetOrder.subtotal,
@@ -313,326 +584,145 @@ export const PosProvider = ({ children }) => {
       total: targetOrder.total,
       paymentMethod,
       amountPaid: amountPaid || targetOrder.total,
-      change: (amountPaid || targetOrder.total) - targetOrder.total,
+      change: Math.max(0, (amountPaid || targetOrder.total) - targetOrder.total),
       status: 'PROSES',
       paymentStatus: 'LUNAS'
     };
 
-    // Deduct stock
-    setProducts(prevProducts => {
-      return prevProducts.map(prod => {
-        const item = targetOrder.items.find(i => i.id === prod.id);
-        if (item) {
-          const updatedStock = Math.max(0, prod.stock - item.qty);
+    // Remove from self order queue
+    setPendingSelfOrders(prev => prev.filter(o => o.id !== orderId));
+    deleteDoc(doc(db, 'pending_self_orders', orderId)).catch(e => console.log('Firebase remove self order:', e));
+
+    // Update Stock
+    setProducts(prevProducts =>
+      prevProducts.map(p => {
+        const itemInOrd = targetOrder.items.find(c => c.id === p.id);
+        if (itemInOrd) {
+          const updatedStock = Math.max(0, p.stock - itemInOrd.qty);
+          updateDoc(doc(db, 'products', p.id), { stock: updatedStock }).catch(e => console.log('Firebase stock sync:', e));
           return {
-            ...prod,
+            ...p,
             stock: updatedStock,
-            status: updatedStock === 0 ? 'Habis' : prod.status
+            status: updatedStock === 0 ? 'Habis' : p.status
           };
         }
-        return prod;
-      });
-    });
+        return p;
+      })
+    );
 
-    // Update table status to Terisi
-    const targetTableObj = tables.find(t => t.number === targetOrder.tableName);
-    if (targetTableObj) {
-      setTables(prev => prev.map(t => t.id === targetTableObj.id ? { ...t, status: 'Terisi' } : t));
-    }
-
-    setTransactions(prev => [newTx, ...prev]);
-    setPendingSelfOrders(prev => prev.filter(o => o.id !== orderId));
-    setActiveReceipt(newTx);
-    showToast(`Pesanan QR ${orderId} Dikonfirmasi & Dituntaskan!`, 'success');
-  };
-
-  const rejectCustomerOrder = (orderId) => {
-    setPendingSelfOrders(prev => prev.filter(o => o.id !== orderId));
-    showToast(`Pesanan QR ${orderId} ditolak oleh Kasir.`, 'warning');
-  };
-
-  // Process Transaction & Dispatch to KDS / BDS
-  const processPayment = ({ paymentMethod, amountPaid }) => {
-    if (cart.length === 0) return;
-
-    const currentBranchObj = branches.find(b => b.id === (activeBranch === 'all' ? 'cabang-01' : activeBranch)) || branches[0];
-    const currentCustObj = customers.find(c => c.id === selectedCustomer) || { name: 'Pelanggan Umum' };
-    const currentTblObj = orderType === 'Dine In' ? (tables.find(t => t.id === selectedTable) || { number: 'Meja 01' }) : { number: 'Take Away' };
-
-    const change = amountPaid >= cartTotal ? amountPaid - cartTotal : 0;
-    const now = new Date();
-    const invoiceId = `TRX-${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    const newTransaction = {
-      id: invoiceId,
-      date: now.toISOString(),
-      branchId: currentBranchObj.id,
-      branchName: currentBranchObj.name,
-      cashierName: activeUser?.name || 'Kasir',
-      customerName: currentCustObj.name,
-      tableName: currentTblObj.number,
-      orderType,
-      items: cart.map(item => ({
-        id: item.id,
-        sku: item.sku || 'SKU-NUSA',
-        name: item.name,
-        price: item.price,
-        qty: item.qty,
-        subtotal: item.price * item.qty,
-        station: item.station || (item.category === 'makanan' || item.category === 'snack' ? 'Dapur' : 'Bar'),
-        notes: item.notes || '',
-        stationStatus: 'Pending'
-      })),
-      subtotal: cartSubtotal,
-      discount: cartDiscount,
-      tax: cartTax,
-      total: cartTotal,
-      paymentMethod,
-      amountPaid,
-      change,
-      status: 'PROSES',
-      paymentStatus: 'LUNAS'
-    };
-
-    // Deduct inventory stock
-    setProducts(prevProducts => {
-      return prevProducts.map(prod => {
-        const cartItem = cart.find(c => c.id === prod.id);
-        if (cartItem) {
-          const updatedStock = Math.max(0, prod.stock - cartItem.qty);
-          return {
-            ...prod,
-            stock: updatedStock,
-            status: updatedStock === 0 ? 'Habis' : prod.status
-          };
-        }
-        return prod;
-      });
-    });
-
-    // Update table status if Dine In
-    if (orderType === 'Dine In' && selectedTable) {
-      setTables(prev => prev.map(t => t.id === selectedTable ? { ...t, status: 'Terisi' } : t));
-    }
-
-    // Add to transaction log
+    // Save transaction
     setTransactions(prev => [newTransaction, ...prev]);
+    setDoc(doc(db, 'transactions', newTransaction.id), newTransaction).catch(e => console.log('Firebase trx save:', e));
 
-    // Show thermal receipt modal
     setActiveReceipt(newTransaction);
-    setShowPaymentModal(false);
-    clearCart();
-    showToast(`Transaksi ${invoiceId} Berhasil! Pesanan terkirim ke Dapur & Bar.`, 'success');
+    showToast(`Pesanan QR ${orderId} Dikonfirmasi! Transaksi ${invoiceNum} Terbit`, 'success');
   };
 
-  // KDS & BDS: Item Status Updater
-  const updateOrderItemStatus = (transactionId, productId, newStatus) => {
-    setTransactions(prevTransactions => {
-      return prevTransactions.map(tx => {
-        if (tx.id === transactionId) {
-          const updatedItems = tx.items.map(item => {
-            if (item.id === productId) {
-              return { ...item, stationStatus: newStatus };
-            }
-            return item;
-          });
+  const rejectCustomerOrder = async (orderId) => {
+    setPendingSelfOrders(prev => prev.filter(o => o.id !== orderId));
+    deleteDoc(doc(db, 'pending_self_orders', orderId)).catch(e => console.log('Firebase reject self order:', e));
+    showToast(`Pesanan QR ${orderId} Ditolak Kasir`, 'warning');
+  };
 
-          const allFinished = updatedItems.every(item => item.stationStatus === 'Selesai');
+  // KDS & BDS Station Item Status Updates
+  const updateStationItemStatus = async (invoiceId, itemIndex, newStatus) => {
+    setTransactions(prevTrx => {
+      return prevTrx.map(trx => {
+        if (trx.id === invoiceId) {
+          const updatedItems = [...trx.items];
+          updatedItems[itemIndex] = {
+            ...updatedItems[itemIndex],
+            stationStatus: newStatus
+          };
 
-          return {
-            ...tx,
+          const allDone = updatedItems.every(i => i.stationStatus === 'Selesai');
+          const updatedTrx = {
+            ...trx,
             items: updatedItems,
-            status: allFinished ? 'SELESAI' : 'PROSES'
+            status: allDone ? 'SELESAI' : 'PROSES'
+          };
+
+          // Sync to Firebase
+          updateDoc(doc(db, 'transactions', invoiceId), {
+            items: updatedItems,
+            status: allDone ? 'SELESAI' : 'PROSES'
+          }).catch(e => console.log('Firebase item status sync:', e));
+
+          return updatedTrx;
+        }
+        return trx;
+      });
+    });
+
+    showToast(`Status Menu Diperbarui ke ${newStatus}`, 'info');
+  };
+
+  // Refund Transaction
+  const refundTransaction = async (invoiceId) => {
+    const targetTrx = transactions.find(t => t.id === invoiceId);
+    if (!targetTrx) return;
+
+    // Restore stock
+    setProducts(prevProducts =>
+      prevProducts.map(p => {
+        const itemInTrx = targetTrx.items.find(i => i.id === p.id);
+        if (itemInTrx) {
+          const restoredStock = p.stock + itemInTrx.qty;
+          updateDoc(doc(db, 'products', p.id), { stock: restoredStock }).catch(e => console.log('Firebase restore stock:', e));
+          return {
+            ...p,
+            stock: restoredStock,
+            status: 'Tersedia'
           };
         }
-        return tx;
-      });
-    });
-    showToast(`Status pesanan diperbarui menjadi: ${newStatus}`, 'info');
+        return p;
+      })
+    );
+
+    // Update status to REFUND
+    setTransactions(prev =>
+      prev.map(t => t.id === invoiceId ? { ...t, status: 'REFUND', paymentStatus: 'REFUNDED' } : t)
+    );
+
+    updateDoc(doc(db, 'transactions', invoiceId), {
+      status: 'REFUND',
+      paymentStatus: 'REFUNDED'
+    }).catch(e => console.log('Firebase refund sync:', e));
+
+    showToast(`Transaksi ${invoiceId} Berhasil Di-Refund & Stok Dipulihkan`, 'danger');
   };
 
-  // CRUD Functions: Branch
-  const addBranch = (newBranch) => {
-    const branchToAdd = {
-      ...newBranch,
-      id: `cabang-${Date.now()}`,
-      status: 'Aktif'
-    };
-    setBranches(prev => [...prev, branchToAdd]);
-    showToast(`Cabang ${newBranch.name} berhasil ditambahkan`, 'success');
-  };
-
-  const updateBranch = (updatedBranch) => {
-    setBranches(prev => prev.map(b => b.id === updatedBranch.id ? updatedBranch : b));
-    showToast(`Cabang ${updatedBranch.name} diperbarui`, 'info');
-  };
-
-  const deleteBranch = (branchId) => {
-    setBranches(prev => prev.filter(b => b.id !== branchId));
-    showToast(`Cabang berhasil dihapus`, 'warning');
-  };
-
-  // CRUD Functions: Category
-  const addCategory = (newCat) => {
-    const catToAdd = {
-      ...newCat,
-      id: newCat.name.toLowerCase().replace(/\s+/g, '-'),
-      icon: newCat.station === 'Bar' ? 'Coffee' : 'Utensils'
-    };
-    setCategories(prev => [...prev, catToAdd]);
-    showToast(`Kategori ${newCat.name} berhasil ditambahkan`, 'success');
-  };
-
-  const deleteCategory = (catId) => {
-    setCategories(prev => prev.filter(c => c.id !== catId));
-    showToast(`Kategori berhasil dihapus`, 'warning');
-  };
-
-  // CRUD Functions: Products
-  const addProduct = (newProd) => {
-    const productToAdd = {
-      ...newProd,
-      id: `prod-${Date.now()}`,
-      sku: newProd.sku || `NUSA-${Math.floor(100 + Math.random() * 900)}`,
-      emoji: newProd.emoji || (newProd.station === 'Bar' ? '🥤' : '🍱'),
-      status: Number(newProd.stock) > 0 ? 'Tersedia' : 'Habis',
-      branchId: newProd.branchId || 'all'
-    };
-    setProducts(prev => [productToAdd, ...prev]);
-    showToast(`Menu ${newProd.name} berhasil ditambahkan!`, 'success');
-  };
-
-  const updateProduct = (updatedProd) => {
-    const formatted = {
-      ...updatedProd,
-      status: Number(updatedProd.stock) > 0 ? 'Tersedia' : 'Habis'
-    };
-    setProducts(prev => prev.map(p => p.id === formatted.id ? formatted : p));
-    showToast(`Menu ${updatedProd.name} diperbarui`, 'info');
-  };
-
-  const deleteProduct = (productId) => {
-    const target = products.find(p => p.id === productId);
-    setProducts(prev => prev.filter(p => p.id !== productId));
-    showToast(`Menu ${target ? target.name : ''} dihapus`, 'warning');
-  };
-
-  // CRUD Functions: Tables
-  const addTable = (newTbl) => {
-    const tableToAdd = {
-      ...newTbl,
-      id: `tbl-${Date.now()}`,
-      status: 'Kosong',
-      qrCode: `QR-${newTbl.number.toUpperCase().replace(/\s+/g, '-')}`
-    };
-    setTables(prev => [...prev, tableToAdd]);
-    showToast(`${newTbl.number} berhasil ditambahkan!`, 'success');
-  };
-
-  const updateTable = (updatedTbl) => {
-    setTables(prev => prev.map(t => t.id === updatedTbl.id ? updatedTbl : t));
-    showToast(`Data ${updatedTbl.number} diperbarui`, 'info');
-  };
-
-  const deleteTable = (tableId) => {
-    setTables(prev => prev.filter(t => t.id !== tableId));
-    showToast(`Meja dihapus`, 'warning');
-  };
-
-  // CRUD Functions: Customers
-  const addCustomer = (newCust) => {
-    const customerToAdd = {
-      ...newCust,
-      id: `cust-${Date.now()}`,
-      ordersCount: 0
-    };
-    setCustomers(prev => [...prev, customerToAdd]);
-    showToast(`Pelanggan ${newCust.name} berhasil ditambahkan`, 'success');
-  };
-
-  const updateCustomer = (updatedCust) => {
-    setCustomers(prev => prev.map(c => c.id === updatedCust.id ? updatedCust : c));
-    showToast(`Data pelanggan ${updatedCust.name} diperbarui`, 'info');
-  };
-
-  const deleteCustomer = (custId) => {
-    setCustomers(prev => prev.filter(c => c.id !== custId));
-    showToast(`Pelanggan dihapus`, 'warning');
-  };
-
-  // CRUD Functions: Users
-  const addUser = (newUser) => {
-    const userToAdd = {
-      ...newUser,
-      id: `user-${Date.now()}`,
-      branchName: branches.find(b => b.id === newUser.branchId)?.name || 'Semua Cabang'
-    };
-    setUsers(prev => [...prev, userToAdd]);
-    showToast(`Staf ${newUser.name} (${newUser.role}) berhasil ditambahkan`, 'success');
-  };
-
-  const updateUser = (updatedUser) => {
-    setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-    showToast(`Staf ${updatedUser.name} diperbarui`, 'info');
-  };
-
-  const deleteUser = (userId) => {
-    setUsers(prev => prev.filter(u => u.id !== userId));
-    showToast(`Pengguna dihapus`, 'warning');
-  };
-
-  // Refund / Reset Transactions
-  const refundTransaction = (transactionId) => {
-    const targetTx = transactions.find(t => t.id === transactionId);
-    if (!targetTx || targetTx.paymentStatus === 'DIBATALKAN') return;
-
-    setProducts(prevProducts => {
-      return prevProducts.map(prod => {
-        const txItem = targetTx.items.find(i => i.id === prod.id);
-        if (txItem) {
-          const restoredStock = prod.stock + txItem.qty;
-          return { ...prod, stock: restoredStock, status: restoredStock > 0 ? 'Tersedia' : prod.status };
-        }
-        return prod;
-      });
-    });
-
-    setTransactions(prev => prev.map(t => t.id === transactionId ? { ...t, paymentStatus: 'DIBATALKAN', status: 'BATAL' } : t));
-    showToast(`Transaksi ${transactionId} dibatalkan & stok dipulihkan`, 'warning');
-  };
-
-  const resetBranchTransactions = (targetBranchId) => {
-    if (targetBranchId === 'all') {
+  // Reset Branch Transactions
+  const resetBranchTransactions = async (branchId) => {
+    if (branchId === 'all') {
       setTransactions([]);
-      showToast(`Seluruh data transaksi semua cabang berhasil di-reset`, 'warning');
     } else {
-      setTransactions(prev => prev.filter(t => t.branchId !== targetBranchId));
-      const targetB = branches.find(b => b.id === targetBranchId);
-      showToast(`Data transaksi untuk ${targetB?.name || 'cabang'} di-reset`, 'warning');
+      setTransactions(prev => prev.filter(t => t.branchId !== branchId));
     }
+    showToast('Data Transaksi Berhasil Direset', 'warning');
   };
 
   return (
     <PosContext.Provider value={{
       theme, setTheme,
       activeTab, setActiveTab,
-      branches, activeBranch, setActiveBranch, addBranch, updateBranch, deleteBranch,
-      users, activeUser, setActiveUser, activeRole, setActiveRole, handleRoleChange, addUser, updateUser, deleteUser,
+      branches, addBranch, updateBranch, deleteBranch,
+      activeBranch, setActiveBranch,
+      users, addUser, deleteUser, activeUser, setActiveUser, activeRole, handleRoleChange,
       categories, addCategory, deleteCategory,
-      products, setProducts, addProduct, updateProduct, deleteProduct,
+      products, addProduct, updateProduct, deleteProduct,
       tables, addTable, updateTable, deleteTable,
       customers, addCustomer, updateCustomer, deleteCustomer,
-      pendingSelfOrders, submitCustomerOrder, approveCustomerOrder, rejectCustomerOrder,
       searchQuery, setSearchQuery,
       selectedCategory, setSelectedCategory,
       orderType, setOrderType,
       selectedTable, setSelectedTable,
       selectedCustomer, setSelectedCustomer,
-      cart, addToCart, updateCartQty, updateCartNotes, removeFromCart, clearCart,
-      cartDiscount, setCartDiscount,
-      cartSubtotal, cartTax, cartTotal,
-      heldCarts, holdCurrentCart, restoreCart,
-      transactions, processPayment, updateOrderItemStatus, refundTransaction, resetBranchTransactions,
+      cart, addToCart, updateCartQty, updateItemNotes, clearCart,
+      cartSubtotal, cartDiscount, setCartDiscount, cartTax, cartTotal,
+      heldCarts, holdCart, restoreCart, deleteHeldCart,
+      pendingSelfOrders, submitCustomerOrder, approveCustomerOrder, rejectCustomerOrder,
+      transactions, processPayment, refundTransaction, resetBranchTransactions, updateStationItemStatus,
       showPaymentModal, setShowPaymentModal,
       showHoldCartModal, setShowHoldCartModal,
       activeReceipt, setActiveReceipt,
@@ -643,4 +733,8 @@ export const PosProvider = ({ children }) => {
   );
 };
 
-export const usePos = () => useContext(PosContext);
+export const usePos = () => {
+  const context = useContext(PosContext);
+  if (!context) throw new Error('usePos harus digunakan di dalam PosProvider');
+  return context;
+};
