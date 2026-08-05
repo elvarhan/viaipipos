@@ -649,18 +649,26 @@ input[type="password"],
 select, 
 textarea {
   width: 100% !important;
+  min-height: 38px !important;
+  line-height: normal !important;
   box-sizing: border-box !important;
-  padding: 9px 12px !important;
+  padding: 8px 12px !important;
   background-color: var(--bg-input) !important;
   border: 1px solid var(--border-color) !important;
   border-radius: var(--radius-md) !important;
   color: var(--text-main) !important;
   font-family: inherit !important;
-  font-size: 0.88rem !important;
-  font-weight: 400 !important; /* Thin & Simple Input Text */
+  font-size: 0.86rem !important;
+  font-weight: 400 !important;
   outline: none !important;
   display: block !important;
   transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+select, select.form-control {
+  appearance: auto !important;
+  padding-right: 28px !important;
+  cursor: pointer !important;
 }
 
 .form-control:focus, 

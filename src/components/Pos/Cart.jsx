@@ -67,13 +67,13 @@ export default function Cart() {
         {/* Dine In Table Selector & Customer Selector */}
         <div style={{ display: 'grid', gridTemplateColumns: orderType === 'Dine In' ? '1fr 1fr' : '1fr', gap: '8px' }}>
           {orderType === 'Dine In' && (
-            <div>
-              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <QrCode size={12} /> Pilih Meja:
               </label>
               <select 
                 className="form-control" 
-                style={{ fontSize: '0.8rem', padding: '4px 8px', height: '32px' }}
+                style={{ fontSize: '0.82rem', padding: '6px 10px', height: '38px', lineHeight: 'normal' }}
                 value={selectedTable}
                 onChange={(e) => setSelectedTable(e.target.value)}
               >
@@ -86,13 +86,13 @@ export default function Cart() {
             </div>
           )}
 
-          <div>
-            <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <User size={12} /> Nama Pelanggan:
             </label>
             <select 
               className="form-control" 
-              style={{ fontSize: '0.8rem', padding: '4px 8px', height: '32px' }}
+              style={{ fontSize: '0.82rem', padding: '6px 10px', height: '38px', lineHeight: 'normal' }}
               value={selectedCustomer}
               onChange={(e) => setSelectedCustomer(e.target.value)}
             >
@@ -129,7 +129,7 @@ export default function Cart() {
         {cart.length === 0 ? (
           <div className="cart-empty">
             <span style={{ fontSize: '3rem' }}>🛒</span>
-            <p style={{ fontWeight: 700, fontSize: '0.95rem' }}>Keranjang Masih Kosong</p>
+            <p style={{ fontWeight: 500, fontSize: '0.95rem' }}>Keranjang Masih Kosong</p>
             <span style={{ fontSize: '0.8rem' }}>Klik produk di sebelah kiri untuk menambah item ke pesanan.</span>
           </div>
         ) : (
@@ -146,7 +146,7 @@ export default function Cart() {
                       <span className="cart-item-title">{item.name}</span>
                       <span style={{
                         fontSize: '0.62rem',
-                        fontWeight: 800,
+                        fontWeight: 500,
                         padding: '1px 6px',
                         borderRadius: '99px',
                         backgroundColor: isDapur ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
@@ -229,7 +229,7 @@ export default function Cart() {
               {cartDiscount > 0 ? `Diskon (-${formatCurrency(cartDiscount)})` : '+ Tambah Diskon'}
             </span>
             {cartDiscount > 0 && (
-              <span style={{ color: 'var(--danger)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+              <span style={{ color: 'var(--danger)', fontFamily: 'var(--font-mono)', fontWeight: 500 }}>
                 -{formatCurrency(cartDiscount)}
               </span>
             )}
