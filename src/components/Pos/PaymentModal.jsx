@@ -8,7 +8,8 @@ export default function PaymentModal() {
     setShowPaymentModal, 
     cartTotal, 
     processPayment,
-    activeUser
+    activeUser,
+    showToast
   } = usePos();
 
   const [paymentMethod, setPaymentMethod] = useState('TUNAI');
@@ -23,11 +24,11 @@ export default function PaymentModal() {
 
   const parsedAmount = parseFloat(amountPaid) || (paymentMethod !== 'TUNAI' ? cartTotal : 0);
   const change = Math.max(0, parsedAmount - cartTotal);
-  const isInsufficient = paymentMethod === 'TUNAI' && parsedAmount < cartTotal;
+  const isInsufficient = paymentMethod === 'TUNAI' && (parsedAmount < cartTotal || !amountPaid);
 
   const quickCashOptions = [
     { label: 'Uang Pas', value: cartTotal },
-    { label: 'Rp 20.000', value: 20000 },
+    { label: 'Rp 30.000', value: 30000 },
     { label: 'Rp 50.000', value: 50000 },
     { label: 'Rp 100.000', value: 100000 },
     { label: 'Rp 200.000', value: 200000 }
@@ -35,7 +36,13 @@ export default function PaymentModal() {
 
   const handleCheckoutSubmit = (e) => {
     e.preventDefault();
-    if (isInsufficient) return;
+    
+    if (paymentMethod === 'TUNAI' && (!amountPaid || parsedAmount < cartTotal)) {
+      const remaining = cartTotal - (parseFloat(amountPaid) || 0);
+      showToast(`Uang pembayaran kurang ${formatCurrency(remaining)}! Silakan masukkan nominal yang cukup.`, 'danger');
+      return;
+    }
+
     processPayment({
       paymentMethod,
       amountPaid: parsedAmount,
@@ -177,7 +184,7 @@ export default function PaymentModal() {
                   </div>
                   {isInsufficient && (
                     <span style={{ fontSize: '0.75rem', color: 'var(--danger)' }}>
-                      Kurang {formatCurrency(cartTotal - parsedAmount)}
+                      Kurang {formatCurrency(cartTotal - (parsedAmount || 0))}
                     </span>
                   )}
                 </div>
@@ -188,7 +195,7 @@ export default function PaymentModal() {
                   fontFamily: 'var(--font-mono)',
                   color: isInsufficient ? 'var(--danger)' : 'var(--primary-dark)'
                 }}>
-                  {isInsufficient ? `- ${formatCurrency(cartTotal - parsedAmount)}` : formatCurrency(change)}
+                  {isInsufficient ? `- ${formatCurrency(cartTotal - (parsedAmount || 0))}` : formatCurrency(change)}
                 </div>
               </div>
             </div>
@@ -218,7 +225,6 @@ export default function PaymentModal() {
             <button 
               type="submit" 
               className="btn btn-primary"
-              disabled={isInsufficient}
               style={{ flex: 2 }}
             >
               <CheckCircle2 size={18} />
