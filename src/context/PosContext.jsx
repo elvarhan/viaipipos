@@ -663,15 +663,16 @@ export const PosProvider = ({ children }) => {
   };
 
   // KDS & BDS Station Item Status Updates
-  const updateStationItemStatus = async (invoiceId, itemIndex, newStatus) => {
+  const updateStationItemStatus = async (invoiceId, itemId, newStatus) => {
     setTransactions(prevTrx => {
       return prevTrx.map(trx => {
         if (trx.id === invoiceId) {
-          const updatedItems = [...trx.items];
-          updatedItems[itemIndex] = {
-            ...updatedItems[itemIndex],
-            stationStatus: newStatus
-          };
+          const updatedItems = trx.items.map((item, idx) => {
+            if (item.id === itemId || item.sku === itemId || idx === itemId) {
+              return { ...item, stationStatus: newStatus };
+            }
+            return item;
+          });
 
           const allDone = updatedItems.every(i => i.stationStatus === 'Selesai');
           const updatedTrx = {
@@ -680,11 +681,15 @@ export const PosProvider = ({ children }) => {
             status: allDone ? 'SELESAI' : 'PROSES'
           };
 
-          // Sync to Firebase
-          updateDoc(doc(db, 'transactions', invoiceId), {
-            items: updatedItems,
-            status: allDone ? 'SELESAI' : 'PROSES'
-          }).catch(e => console.log('Firebase item status sync:', e));
+          // Sync to Firebase Firestore
+          try {
+            updateDoc(doc(db, 'transactions', invoiceId), {
+              items: updatedItems,
+              status: allDone ? 'SELESAI' : 'PROSES'
+            }).catch(e => console.log('Firebase item status sync:', e));
+          } catch (e) {
+            console.log('Firebase item status sync error:', e);
+          }
 
           return updatedTrx;
         }
@@ -692,7 +697,7 @@ export const PosProvider = ({ children }) => {
       });
     });
 
-    showToast(`Status Menu Diperbarui ke ${newStatus}`, 'info');
+    showToast(`Status Menu KDS/BDS Diperbarui ke ${newStatus}`, 'info');
   };
 
   // Refund Transaction
@@ -761,7 +766,7 @@ export const PosProvider = ({ children }) => {
       cartSubtotal, cartDiscount, setCartDiscount, cartTax, cartTotal,
       heldCarts, holdCart, restoreCart, deleteHeldCart,
       pendingSelfOrders, submitCustomerOrder, approveCustomerOrder, rejectCustomerOrder,
-      transactions, processPayment, refundTransaction, resetBranchTransactions, updateStationItemStatus,
+      transactions, processPayment, refundTransaction, resetBranchTransactions, updateStationItemStatus, updateOrderItemStatus: updateStationItemStatus,
       showPaymentModal, setShowPaymentModal,
       showHoldCartModal, setShowHoldCartModal,
       activeReceipt, setActiveReceipt,
