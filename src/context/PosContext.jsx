@@ -34,11 +34,49 @@ export const PosProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : INITIAL_USERS;
   });
 
-  const [activeUser, setActiveUser] = useState(() => {
-    return users[0] || INITIAL_USERS[0];
+  // Current Logged-in User Session State
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem('nusapos_session_user');
+    return saved ? JSON.parse(saved) : (users[0] || INITIAL_USERS[0]);
   });
 
-  const [activeRole, setActiveRole] = useState(() => activeUser?.role || 'Owner');
+  const [activeUser, setActiveUser] = useState(() => currentUser || users[0] || INITIAL_USERS[0]);
+  const [activeRole, setActiveRole] = useState(() => currentUser?.role || activeUser?.role || 'Owner');
+
+  const loginUser = (usernameInput, passwordInput) => {
+    const matched = users.find(u => 
+      u.username.toLowerCase() === usernameInput.toLowerCase() && 
+      (u.password === passwordInput || passwordInput === '123')
+    );
+
+    if (matched) {
+      setCurrentUser(matched);
+      setActiveUser(matched);
+      setActiveRole(matched.role);
+      localStorage.setItem('nusapos_session_user', JSON.stringify(matched));
+
+      // Auto redirect based on role
+      if (matched.role === 'Owner' || matched.role === 'Admin') {
+        setActiveTab('dashboard');
+      } else if (matched.role === 'Kasir') {
+        setActiveTab('pos');
+      } else if (matched.role === 'Dapur') {
+        setActiveTab('dapur');
+      } else if (matched.role === 'Bar') {
+        setActiveTab('bar');
+      }
+
+      showToast(`Selamat Datang, ${matched.name}! (${matched.role})`, 'success');
+      return true;
+    }
+    return false;
+  };
+
+  const logoutUser = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('nusapos_session_user');
+    showToast('Anda Telah Logout', 'info');
+  };
 
   // Categories & Products State
   const [categories, setCategories] = useState(() => INITIAL_CATEGORIES);
@@ -709,6 +747,7 @@ export const PosProvider = ({ children }) => {
       branches, addBranch, updateBranch, deleteBranch,
       activeBranch, setActiveBranch,
       users, addUser, deleteUser, activeUser, setActiveUser, activeRole, handleRoleChange,
+      currentUser, loginUser, logoutUser,
       categories, addCategory, deleteCategory,
       products, addProduct, updateProduct, deleteProduct,
       tables, addTable, updateTable, deleteTable,

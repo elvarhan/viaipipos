@@ -64,11 +64,11 @@ export const INITIAL_CATEGORIES = [
 ];
 
 export const INITIAL_USERS = [
-  { id: 'user-01', name: 'Hendra Owner', username: 'owner', role: 'Owner', branchId: 'all', branchName: 'Semua Cabang' },
-  { id: 'user-02', name: 'Andi Admin', username: 'admin', role: 'Admin', branchId: 'cabang-01', branchName: 'Cabang Utama (Jakarta)' },
-  { id: 'user-03', name: 'Rina Kasir', username: 'kasir', role: 'Kasir', branchId: 'cabang-01', branchName: 'Cabang Utama (Jakarta)' },
-  { id: 'user-04', name: 'Chef Jaka', username: 'dapur', role: 'Dapur', branchId: 'cabang-01', branchName: 'Cabang Utama (Jakarta)' },
-  { id: 'user-05', name: 'Barista Doni', username: 'bar', role: 'Bar', branchId: 'cabang-01', branchName: 'Cabang Utama (Jakarta)' }
+  { id: 'user-01', name: 'Hendra Owner', username: 'owner', password: '123', role: 'Owner', branchId: 'all', branchName: 'Semua Cabang' },
+  { id: 'user-02', name: 'Andi Admin', username: 'admin', password: '123', role: 'Admin', branchId: 'cabang-01', branchName: 'Cabang Utama Jakarta' },
+  { id: 'user-03', name: 'Rina Kasir', username: 'kasir', password: '123', role: 'Kasir', branchId: 'cabang-01', branchName: 'Cabang Utama Jakarta' },
+  { id: 'user-04', name: 'Chef Jaka', username: 'dapur', password: '123', role: 'Dapur', branchId: 'cabang-01', branchName: 'Cabang Utama Jakarta' },
+  { id: 'user-05', name: 'Barista Doni', username: 'bar', password: '123', role: 'Bar', branchId: 'cabang-01', branchName: 'Cabang Utama Jakarta' }
 ];
 
 export const INITIAL_TABLES = [

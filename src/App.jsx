@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 
 // Views
+import LoginView from './components/Auth/LoginView';
 import DashboardView from './components/Dashboard/DashboardView';
 import PosView from './components/Pos/PosView';
 import KitchenDisplayView from './components/Kitchen/KitchenDisplayView';
@@ -24,13 +25,23 @@ import ReceiptModal from './components/Receipt/ReceiptModal';
 import ToastNotification from './components/Shared/ToastNotification';
 
 function MainLayout() {
-  const { activeTab } = usePos();
+  const { activeTab, currentUser } = usePos();
 
-  // Standalone Clean Customer Self-Order View (No Admin Navbar or Sidebar)
+  // 1. Standalone Customer Self-Order View (No Login Required for Customers)
   if (activeTab === 'self-order') {
     return (
       <div className="app-container" style={{ overflowY: 'auto' }}>
         <CustomerSelfOrderView />
+        <ToastNotification />
+      </div>
+    );
+  }
+
+  // 2. Protected Staff / Admin Layout (Requires User Login)
+  if (!currentUser) {
+    return (
+      <div className="app-container">
+        <LoginView />
         <ToastNotification />
       </div>
     );
