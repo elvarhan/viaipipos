@@ -33,7 +33,7 @@ export default function PreBillModal({ isOpen, onClose, billData }) {
 
         {/* Modal Body / Thermal Receipt View */}
         <div className="modal-body" style={{ padding: '20px', backgroundColor: '#f8fafc', overflowY: 'auto', maxHeight: '75vh' }}>
-          <div id="printable-prebill" style={{
+          <div className="receipt-paper" id="printable-prebill" style={{
             backgroundColor: '#ffffff',
             padding: '20px',
             borderRadius: '8px',
