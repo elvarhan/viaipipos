@@ -55,6 +55,9 @@ export default function PaymentModal() {
       return;
     }
 
+    // Immediately close payment modal popup for instant UI responsiveness
+    setShowPaymentModal(false);
+
     processPayment({
       paymentMethod,
       amountPaid: finalAmountPaid,

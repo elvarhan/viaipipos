@@ -773,9 +773,13 @@ export const PosProvider = ({ children }) => {
       setTables(prev => prev.map(t => t.id === selectedTable ? { ...t, status: 'Kosong' } : t));
     }
 
-    // Update Transactions & Sync Firebase
-    setTransactions(prev => [newTransaction, ...prev]);
+    // Set Receipt Modal, Hide Payment Modal & Clear Cart synchronously
+    setShowPaymentModal(false);
+    setActiveReceipt(newTransaction);
+    clearCart();
+    showToast(`Transaksi ${invoiceNum} Berhasil Diselesaikan!`, 'success');
 
+    // Sync to Firebase asynchronously in background
     try {
       if (db) {
         await setDoc(doc(db, 'transactions', newTransaction.id), newTransaction);
@@ -783,12 +787,6 @@ export const PosProvider = ({ children }) => {
     } catch (e) {
       console.log('Firebase transaction sync notice:', e);
     }
-
-    // Set Receipt Modal, Hide Payment Modal & Clear Cart
-    setActiveReceipt(newTransaction);
-    setShowPaymentModal(false);
-    clearCart();
-    showToast(`Transaksi ${invoiceNum} Berhasil Diselesaikan!`, 'success');
   };
 
   // Self-Order Customer Submit
