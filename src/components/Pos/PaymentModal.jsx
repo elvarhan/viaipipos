@@ -6,6 +6,7 @@ export default function PaymentModal() {
   const { 
     showPaymentModal, 
     setShowPaymentModal, 
+    cart,
     cartTotal, 
     processPayment,
     activeUser,
@@ -38,6 +39,12 @@ export default function PaymentModal() {
   const handleCheckoutSubmit = (e) => {
     if (e) e.preventDefault();
     
+    if (!cart || cart.length === 0) {
+      showToast('Keranjang pesanan kosong! Silakan tambahkan menu terlebih dahulu.', 'warning');
+      setShowPaymentModal(false);
+      return;
+    }
+
     // Auto-fill cash amount to exact total if left empty
     let finalAmountPaid = parsedAmount;
     if (paymentMethod === 'TUNAI' && (!amountPaid || parseFloat(amountPaid) <= 0)) {
@@ -256,9 +263,10 @@ export default function PaymentModal() {
             </button>
 
             <button 
-              type="submit" 
+              type="button" 
               className="btn btn-success"
-              style={{ flex: 2, padding: '12px 14px', fontWeight: 800, fontSize: '0.95rem' }}
+              onClick={handleCheckoutSubmit}
+              style={{ flex: 2, padding: '12px 14px', fontWeight: 800, fontSize: '0.95rem', cursor: 'pointer' }}
             >
               {shouldPrint ? <Printer size={18} /> : <CheckCircle2 size={18} />}
               <span>SELESAIKAN TRANSAKSI</span>

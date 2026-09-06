@@ -693,7 +693,11 @@ export const PosProvider = ({ children }) => {
 
   // Process Checkout Payment
   const processPayment = async (paymentDetails) => {
-    if (cart.length === 0) return;
+    if (cart.length === 0) {
+      showToast('Keranjang pesanan kosong! Silakan tambahkan menu terlebih dahulu.', 'warning');
+      setShowPaymentModal(false);
+      return;
+    }
 
     const selectedTableObj = tables.find(t => t.id === selectedTable);
     const selectedCustObj = customers.find(c => c.id === selectedCustomer);
@@ -708,10 +712,10 @@ export const PosProvider = ({ children }) => {
       date: dateObj.toISOString(),
       branchId: activeBranch === 'all' ? 'cabang-01' : activeBranch,
       branchName: activeBranchObj ? activeBranchObj.name : 'Cabang Utama',
-      cashierName: paymentDetails.cashierName || activeUser.name,
+      cashierName: paymentDetails.cashierName || activeUser?.name || 'Kasir Bertugas',
       customerName: selectedCustObj ? selectedCustObj.name : 'Pelanggan Umum',
       tableName: selectedTableObj ? selectedTableObj.number : 'Take Away',
-      orderType,
+      orderType: orderType || 'Dine In',
       items: cart.map(item => ({
         ...item,
         subtotal: item.price * item.qty,
@@ -721,31 +725,36 @@ export const PosProvider = ({ children }) => {
       discount: cartDiscount,
       tax: cartTax,
       total: cartTotal,
-      paymentMethod: paymentDetails.paymentMethod,
-      amountPaid: paymentDetails.amountPaid,
-      change: Math.max(0, paymentDetails.amountPaid - cartTotal),
+      paymentMethod: paymentDetails.paymentMethod || 'TUNAI',
+      amountPaid: paymentDetails.amountPaid || cartTotal,
+      change: Math.max(0, (paymentDetails.amountPaid || cartTotal) - cartTotal),
       status: 'PROSES',
       paymentStatus: 'LUNAS',
       autoPrint: paymentDetails.autoPrint || false
     };
 
-    // Update Local Stock
-    setProducts(prevProducts =>
-      prevProducts.map(p => {
-        const itemInCart = cart.find(c => c.id === p.id);
-        if (itemInCart) {
-          const updatedStock = Math.max(0, p.stock - itemInCart.qty);
-          // Sync stock to Firebase
-          updateDoc(doc(db, 'products', p.id), { stock: updatedStock }).catch(e => console.log('Firebase stock sync:', e));
-          return {
-            ...p,
-            stock: updatedStock,
-            status: updatedStock === 0 ? 'Habis' : p.status
-          };
-        }
-        return p;
-      })
-    );
+    // Update Local Stock safely
+    try {
+      setProducts(prevProducts =>
+        prevProducts.map(p => {
+          const itemInCart = cart.find(c => c.id === p.id);
+          if (itemInCart) {
+            const updatedStock = Math.max(0, p.stock - itemInCart.qty);
+            if (db) {
+              updateDoc(doc(db, 'products', p.id), { stock: updatedStock }).catch(e => console.log('Firebase stock sync notice:', e));
+            }
+            return {
+              ...p,
+              stock: updatedStock,
+              status: updatedStock === 0 ? 'Habis' : p.status
+            };
+          }
+          return p;
+        })
+      );
+    } catch (e) {
+      console.log('Stock update notice:', e);
+    }
 
     // If an active Open Bill was paid, remove it and free table
     if (activeOpenBillId) {
@@ -768,12 +777,14 @@ export const PosProvider = ({ children }) => {
     setTransactions(prev => [newTransaction, ...prev]);
 
     try {
-      await setDoc(doc(db, 'transactions', newTransaction.id), newTransaction);
+      if (db) {
+        await setDoc(doc(db, 'transactions', newTransaction.id), newTransaction);
+      }
     } catch (e) {
-      console.log('Firebase transaction sync:', e);
+      console.log('Firebase transaction sync notice:', e);
     }
 
-    // Set Receipt Modal & Clear Cart
+    // Set Receipt Modal, Hide Payment Modal & Clear Cart
     setActiveReceipt(newTransaction);
     setShowPaymentModal(false);
     clearCart();
