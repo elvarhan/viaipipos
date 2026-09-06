@@ -13,11 +13,12 @@ export default function BarDisplayView() {
     return () => clearInterval(timer);
   }, []);
 
-  // Filter transactions containing items for station 'Bar'
+  // Filter transactions containing items for station 'Bar' (Hanya transaksi yang SUDAH LUNAS / diselesaikan Kasir)
   const barOrders = transactions.filter(t => {
+    const isPaid = t.paymentStatus === 'LUNAS' || t.status === 'PROSES' || t.status === 'SELESAI';
     const matchesBranch = activeBranch === 'all' || t.branchId === activeBranch;
-    const hasBarItems = t.items.some(i => i.station === 'Bar');
-    if (!matchesBranch || !hasBarItems) return false;
+    const hasBarItems = t.items && t.items.some(i => i.station === 'Bar');
+    if (!isPaid || !matchesBranch || !hasBarItems) return false;
 
     const matchesSearch = 
       t.id.toLowerCase().includes(search.toLowerCase()) ||
@@ -56,7 +57,7 @@ export default function BarDisplayView() {
             <div>
               <h2 style={{ fontSize: '1.4rem', fontWeight: 800 }}>Monitor Bar (Bar Display System)</h2>
               <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                Antrean Pesanan Masuk Stasiun Kopi, Milk Shake & Minuman
+                Antrean Pesanan Masuk Stasiun Kopi, Milk Shake & Minuman (Telah Lunas Dikasir)
               </span>
             </div>
           </div>

@@ -14,11 +14,12 @@ export default function KitchenDisplayView() {
     return () => clearInterval(timer);
   }, []);
 
-  // Filter transactions containing items for station 'Dapur'
+  // Filter transactions containing items for station 'Dapur' (Hanya transaksi yang SUDAH LUNAS / diselesaikan Kasir)
   const kitchenOrders = transactions.filter(t => {
+    const isPaid = t.paymentStatus === 'LUNAS' || t.status === 'PROSES' || t.status === 'SELESAI';
     const matchesBranch = activeBranch === 'all' || t.branchId === activeBranch;
-    const hasKitchenItems = t.items.some(i => i.station === 'Dapur');
-    if (!matchesBranch || !hasKitchenItems) return false;
+    const hasKitchenItems = t.items && t.items.some(i => i.station === 'Dapur');
+    if (!isPaid || !matchesBranch || !hasKitchenItems) return false;
 
     const matchesSearch = 
       t.id.toLowerCase().includes(search.toLowerCase()) ||
@@ -57,7 +58,7 @@ export default function KitchenDisplayView() {
             <div>
               <h2 style={{ fontSize: '1.4rem', fontWeight: 800 }}>Monitor Dapur (Kitchen Display System)</h2>
               <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                Antrean Pesanan Masuk Stasiun Makanan & Snack
+                Antrean Pesanan Masuk Stasiun Makanan & Snack (Telah Lunas Dikasir)
               </span>
             </div>
           </div>
