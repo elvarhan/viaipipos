@@ -10,7 +10,7 @@ export default function PosView() {
   const [showSelfOrdersModal, setShowSelfOrdersModal] = useState(false);
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
       {/* Banner Notice for Incoming Self-Orders from Customers */}
       {pendingSelfOrders.length > 0 && (
         <div style={{
@@ -20,7 +20,8 @@ export default function PosView() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          gap: '12px'
+          gap: '12px',
+          flexShrink: 0
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{ backgroundColor: 'var(--primary)', color: 'white', padding: '6px', borderRadius: '50%', display: 'flex' }}>
@@ -52,7 +53,7 @@ export default function PosView() {
         <Cart />
       </div>
 
-      {/* Modal Self-Orders */}
+      {/* Modals */}
       <PendingSelfOrdersModal 
         isOpen={showSelfOrdersModal} 
         onClose={() => setShowSelfOrdersModal(false)} 
@@ -60,3 +61,4 @@ export default function PosView() {
     </div>
   );
 }
+

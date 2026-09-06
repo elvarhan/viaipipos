@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { usePos } from '../../context/PosContext';
-import { ShoppingCart, Trash2, Plus, Minus, CreditCard, PauseCircle, Tag, Utensils, ShoppingBag, QrCode, User, Edit3, ChefHat, Coffee } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, CreditCard, PauseCircle, Tag, Utensils, ShoppingBag, QrCode, User, Edit3, Receipt, FolderOpen } from 'lucide-react';
 
 export default function Cart() {
   const {
     cart, updateCartQty, updateCartNotes, removeFromCart, clearCart,
     cartDiscount, setCartDiscount,
     cartSubtotal, cartTax, cartTotal,
-    holdCurrentCart, setShowPaymentModal,
+    saveOpenBill, setShowPaymentModal, setShowHoldCartModal,
+    openBills, activeOpenBillId,
     orderType, setOrderType,
     tables, selectedTable, setSelectedTable,
     customers, selectedCustomer, setSelectedCustomer,
@@ -106,22 +107,55 @@ export default function Cart() {
         </div>
       </div>
 
+      {/* Active Editing Open Bill Banner */}
+      {activeOpenBillId && (
+        <div style={{
+          backgroundColor: '#eff6ff',
+          borderBottom: '1px solid #93c5fd',
+          padding: '8px 16px',
+          fontSize: '0.78rem',
+          color: '#1d4ed8',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <span>✏️ Mengedit <strong>Open Bill #{activeOpenBillId}</strong></span>
+          <span style={{ fontSize: '0.7rem', backgroundColor: '#dbeafe', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+            Aktif
+          </span>
+        </div>
+      )}
+
       {/* Header */}
-      <div className="cart-header">
+      <div className="cart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="cart-title">
           <ShoppingCart size={18} style={{ color: 'var(--accent)' }} />
           <span>Pesanan Aktif</span>
           <span className="cart-badge">{totalItemsCount}</span>
         </div>
-        {cart.length > 0 && (
+
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <button 
-            className="btn btn-danger btn-sm"
-            onClick={clearCart}
-            title="Kosongkan Keranjang"
+            className="btn btn-secondary btn-sm"
+            style={{ fontSize: '0.75rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+            onClick={() => setShowHoldCartModal(true)}
+            title="Buka daftar Open Bill tersimpan"
           >
-            <Trash2 size={14} />
+            <Receipt size={13} style={{ color: 'var(--accent)' }} />
+            <span>Open Bill ({openBills.length})</span>
           </button>
-        )}
+
+          {cart.length > 0 && (
+            <button 
+              className="btn btn-danger btn-sm"
+              onClick={clearCart}
+              title="Kosongkan Keranjang"
+              style={{ padding: '4px 8px' }}
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Cart Items List */}
@@ -260,16 +294,16 @@ export default function Cart() {
           <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
             <button 
               className="btn btn-secondary" 
-              style={{ flex: 1 }}
-              onClick={() => holdCurrentCart()}
-              title="Simpan sementara transaksi pelanggan"
+              style={{ flex: 1, padding: '10px 12px', fontWeight: 600 }}
+              onClick={() => saveOpenBill()}
+              title="Simpan pesanan sebagai Open Bill (Tagihan Terbuka)"
             >
-              <PauseCircle size={16} />
-              <span>Simpan</span>
+              <PauseCircle size={16} style={{ color: 'var(--accent)' }} />
+              <span>{activeOpenBillId ? 'Update Bill' : 'Open Bill'}</span>
             </button>
             <button 
               className="btn btn-success" 
-              style={{ flex: 2 }}
+              style={{ flex: 2, padding: '10px 12px', fontWeight: 800 }}
               onClick={() => setShowPaymentModal(true)}
             >
               <CreditCard size={18} />

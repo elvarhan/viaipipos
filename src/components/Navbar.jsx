@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { usePos } from '../context/PosContext';
-import { ShoppingBag, Sun, Moon, Clock, UserCheck, PauseCircle, Building2, ShieldAlert, QrCode, LogOut } from 'lucide-react';
+import { ShoppingBag, Sun, Moon, Clock, UserCheck, PauseCircle, Building2, ShieldAlert, QrCode, LogOut, Receipt } from 'lucide-react';
 
 export default function Navbar() {
   const { 
     theme, setTheme, 
-    heldCarts, 
+    openBills, 
     setShowHoldCartModal,
     branches, activeBranch, setActiveBranch,
     activeRole, handleRoleChange,
@@ -40,6 +40,30 @@ export default function Navbar() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        {/* Open Bills Quick Access */}
+        <button 
+          className="btn btn-secondary btn-sm"
+          onClick={() => {
+            setActiveTab('pos');
+            setShowHoldCartModal(true);
+          }}
+          style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+          title="Kelola Tagihan Terbuka (Open Bill)"
+        >
+          <Receipt size={15} style={{ color: 'var(--accent)' }} />
+          <span style={{ fontWeight: 600 }}>Open Bill</span>
+          <span style={{
+            backgroundColor: 'var(--primary)',
+            color: '#fff',
+            fontWeight: 700,
+            borderRadius: '99px',
+            padding: '1px 7px',
+            fontSize: '0.7rem'
+          }}>
+            {openBills ? openBills.length : 0}
+          </span>
+        </button>
+
         {/* Pending Customer Self Orders Notification */}
         {pendingSelfOrders.length > 0 && (
           <button 

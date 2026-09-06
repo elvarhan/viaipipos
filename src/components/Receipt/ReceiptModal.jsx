@@ -1,9 +1,18 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { usePos } from '../../context/PosContext';
 import { X, Printer, CheckCircle2 } from 'lucide-react';
 
 export default function ReceiptModal() {
   const { activeReceipt, setActiveReceipt } = usePos();
+
+  useEffect(() => {
+    if (activeReceipt && activeReceipt.autoPrint) {
+      const timer = setTimeout(() => {
+        window.print();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [activeReceipt]);
 
   if (!activeReceipt) return null;
 

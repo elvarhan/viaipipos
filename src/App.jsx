@@ -20,12 +20,13 @@ import CustomerSelfOrderView from './components/CustomerOrder/CustomerSelfOrderV
 
 // Modals
 import PaymentModal from './components/Pos/PaymentModal';
-import HoldCartModal from './components/Pos/HoldCartModal';
+import OpenBillModal from './components/Pos/OpenBillModal';
+import PreBillModal from './components/Pos/PreBillModal';
 import ReceiptModal from './components/Receipt/ReceiptModal';
 import ToastNotification from './components/Shared/ToastNotification';
 
 function MainLayout() {
-  const { activeTab, currentUser } = usePos();
+  const { activeTab, currentUser, showPreBillModal, setShowPreBillModal, selectedPreBill } = usePos();
 
   // 1. Standalone Customer Self-Order View (No Login Required for Customers)
   if (activeTab === 'self-order') {
@@ -69,7 +70,12 @@ function MainLayout() {
 
       {/* Global Modals & Notifications */}
       <PaymentModal />
-      <HoldCartModal />
+      <OpenBillModal />
+      <PreBillModal 
+        isOpen={showPreBillModal}
+        onClose={() => setShowPreBillModal(false)}
+        billData={selectedPreBill}
+      />
       <ReceiptModal />
       <ToastNotification />
     </div>

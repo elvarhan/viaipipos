@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { usePos } from '../../context/PosContext';
-import { X, Banknote, QrCode, CreditCard, Building2, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
+import { X, Banknote, QrCode, CreditCard, Building2, CheckCircle2, AlertCircle, ArrowRight, Printer } from 'lucide-react';
 
 export default function PaymentModal() {
   const { 
@@ -15,6 +15,7 @@ export default function PaymentModal() {
   const [paymentMethod, setPaymentMethod] = useState('TUNAI');
   const [amountPaid, setAmountPaid] = useState('');
   const [cashierName, setCashierName] = useState(activeUser?.name || 'Kasir Bertugas');
+  const [shouldPrint, setShouldPrint] = useState(true);
 
   if (!showPaymentModal) return null;
 
@@ -35,18 +36,23 @@ export default function PaymentModal() {
   ];
 
   const handleCheckoutSubmit = (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     
-    if (paymentMethod === 'TUNAI' && (!amountPaid || parsedAmount < cartTotal)) {
-      const remaining = cartTotal - (parseFloat(amountPaid) || 0);
+    // Auto-fill cash amount to exact total if left empty
+    let finalAmountPaid = parsedAmount;
+    if (paymentMethod === 'TUNAI' && (!amountPaid || parseFloat(amountPaid) <= 0)) {
+      finalAmountPaid = cartTotal;
+    } else if (paymentMethod === 'TUNAI' && finalAmountPaid < cartTotal) {
+      const remaining = cartTotal - finalAmountPaid;
       showToast(`Uang pembayaran kurang ${formatCurrency(remaining)}! Silakan masukkan nominal yang cukup.`, 'danger');
       return;
     }
 
     processPayment({
       paymentMethod,
-      amountPaid: parsedAmount,
-      cashierName
+      amountPaid: finalAmountPaid,
+      cashierName: cashierName || activeUser?.name || 'Kasir Bertugas',
+      autoPrint: shouldPrint
     });
   };
 
@@ -144,11 +150,10 @@ export default function PaymentModal() {
                   type="number" 
                   className="form-control"
                   style={{ fontSize: '1.25rem', fontFamily: 'var(--font-mono)', fontWeight: 500, padding: '12px 14px' }}
-                  placeholder="Masukkan nominal uang dari pembeli..."
+                  placeholder={`Nominal uang (default: ${formatCurrency(cartTotal)})...`}
                   value={amountPaid}
                   onChange={(e) => setAmountPaid(e.target.value)}
                   autoFocus
-                  required
                 />
               </div>
 
@@ -209,25 +214,53 @@ export default function PaymentModal() {
               className="form-control"
               value={cashierName}
               onChange={(e) => setCashierName(e.target.value)}
-              required
             />
           </div>
 
+          {/* Option Checkbox / Toggle Cetak Struk */}
+          <div 
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 14px',
+              backgroundColor: 'var(--bg-input)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-color)',
+              cursor: 'pointer',
+              marginTop: '4px'
+            }}
+            onClick={() => setShouldPrint(!shouldPrint)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.84rem', fontWeight: 500 }}>
+              <Printer size={16} style={{ color: 'var(--primary)' }} />
+              <span>Cetak Struk Otomatis setelah bayar</span>
+            </div>
+            <input 
+              type="checkbox" 
+              checked={shouldPrint} 
+              onChange={(e) => setShouldPrint(e.target.checked)}
+              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+            />
+          </div>
+
+          {/* Action Buttons */}
           <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
             <button 
               type="button" 
               className="btn btn-secondary" 
               onClick={() => setShowPaymentModal(false)}
-              style={{ flex: 1 }}
+              style={{ flex: 1, padding: '12px 14px', fontWeight: 600 }}
             >
               Batal
             </button>
+
             <button 
               type="submit" 
-              className="btn btn-primary"
-              style={{ flex: 2 }}
+              className="btn btn-success"
+              style={{ flex: 2, padding: '12px 14px', fontWeight: 800, fontSize: '0.95rem' }}
             >
-              <CheckCircle2 size={18} />
+              {shouldPrint ? <Printer size={18} /> : <CheckCircle2 size={18} />}
               <span>SELESAIKAN TRANSAKSI</span>
             </button>
           </div>

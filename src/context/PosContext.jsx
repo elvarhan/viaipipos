@@ -106,7 +106,68 @@ export const PosProvider = ({ children }) => {
   // Cart State
   const [cart, setCart] = useState([]);
   const [cartDiscount, setCartDiscount] = useState(0);
-  const [heldCarts, setHeldCarts] = useState([]);
+  
+  // Open Bills State (Enhanced Hold Carts)
+  const [openBills, setOpenBills] = useState(() => {
+    const saved = localStorage.getItem('nusapos_open_bills');
+    if (saved) return JSON.parse(saved);
+    return [
+      {
+        id: 'BILL-1001',
+        billNumber: 'BILL-1001',
+        time: new Date(Date.now() - 900000).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+        createdAt: new Date(Date.now() - 900000).toISOString(),
+        orderType: 'Dine In',
+        tableId: 'tbl-01',
+        tableName: 'Meja 01',
+        customerId: 'cust-general',
+        customerName: 'Bpk. Hendra (Meja 01)',
+        cashierName: 'Ahmad Kasir',
+        branchId: 'cabang-01',
+        items: [
+          { id: 'prod-001', name: 'Nasi Goreng Spesial Nusa Cafe', price: 28000, qty: 2, subtotal: 56000, station: 'Dapur', notes: 'Tidak pedas' },
+          { id: 'prod-008', name: 'Kopi Susu Gula Aren Nusa', price: 22000, qty: 2, subtotal: 44000, station: 'Bar', notes: 'Less Ice' }
+        ],
+        subtotal: 100000,
+        discount: 0,
+        tax: 10000,
+        total: 110000,
+        status: 'Diproses Dapur'
+      },
+      {
+        id: 'BILL-1002',
+        billNumber: 'BILL-1002',
+        time: new Date(Date.now() - 1800000).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+        createdAt: new Date(Date.now() - 1800000).toISOString(),
+        orderType: 'Dine In',
+        tableId: 'tbl-02',
+        tableName: 'Meja 02',
+        customerId: 'cust-general',
+        customerName: 'Ibu Siska (Meja 02)',
+        cashierName: 'Ahmad Kasir',
+        branchId: 'cabang-01',
+        items: [
+          { id: 'prod-002', name: 'Ayam Bakar Madu + Nasi', price: 32000, qty: 3, subtotal: 96000, station: 'Dapur', notes: 'Sambal terpisah' },
+          { id: 'prod-009', name: 'Es Teh Manis Jumbo', price: 8000, qty: 3, subtotal: 24000, station: 'Bar', notes: '' }
+        ],
+        subtotal: 120000,
+        discount: 10000,
+        tax: 11000,
+        total: 121000,
+        status: 'Diproses Dapur'
+      }
+    ];
+  });
+  const [heldCarts, setHeldCarts] = useState(openBills);
+  const [activeOpenBillId, setActiveOpenBillId] = useState(null);
+  const [showPreBillModal, setShowPreBillModal] = useState(false);
+  const [selectedPreBill, setSelectedPreBill] = useState(null);
+
+  useEffect(() => {
+    localStorage.setItem('nusapos_open_bills', JSON.stringify(openBills));
+    setHeldCarts(openBills);
+  }, [openBills]);
+
 
   // Self-Ordering Customer Queue
   const [pendingSelfOrders, setPendingSelfOrders] = useState(() => [
@@ -447,45 +508,188 @@ export const PosProvider = ({ children }) => {
   const cartTax = Math.round((cartSubtotal - cartDiscount) * 0.1);
   const cartTotal = Math.max(0, cartSubtotal - cartDiscount + cartTax);
 
-  // Hold Cart
-  const holdCart = (customerNameNote = '') => {
+  // Open Bill Helpers
+  const saveOpenBill = (customNote = '') => {
     if (cart.length === 0) return;
-    const newHold = {
-      id: `HOLD-${Date.now()}`,
-      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-      cart,
-      subtotal: cartSubtotal,
-      discount: cartDiscount,
-      tax: cartTax,
-      total: cartTotal,
-      orderType,
-      selectedTable,
-      selectedCustomer,
-      note: customerNameNote || 'Pesanan Tertunda'
-    };
-    setHeldCarts(prev => [newHold, ...prev]);
+
+    const selectedTableObj = tables.find(t => t.id === selectedTable);
+    const selectedCustObj = customers.find(c => c.id === selectedCustomer);
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+    if (activeOpenBillId) {
+      // Update existing Open Bill
+      setOpenBills(prev => prev.map(bill => {
+        if (bill.id === activeOpenBillId) {
+          return {
+            ...bill,
+            updatedAt: now.toISOString(),
+            time: timeStr,
+            items: cart,
+            subtotal: cartSubtotal,
+            discount: cartDiscount,
+            tax: cartTax,
+            total: cartTotal,
+            orderType,
+            tableId: selectedTable,
+            tableName: selectedTableObj ? selectedTableObj.number : 'Take Away',
+            customerId: selectedCustomer,
+            customerName: selectedCustObj ? selectedCustObj.name : 'Pelanggan Umum',
+            cashierName: activeUser?.name || 'Kasir',
+            notes: customNote || bill.notes || ''
+          };
+        }
+        return bill;
+      }));
+      showToast(`Open Bill #${activeOpenBillId} Berhasil Diperbarui`, 'success');
+    } else {
+      // Create New Open Bill
+      const newBillNumber = `BILL-${Math.floor(1000 + Math.random() * 9000)}`;
+      const newBill = {
+        id: newBillNumber,
+        billNumber: newBillNumber,
+        time: timeStr,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+        orderType,
+        tableId: selectedTable,
+        tableName: selectedTableObj ? selectedTableObj.number : 'Take Away',
+        customerId: selectedCustomer,
+        customerName: selectedCustObj ? selectedCustObj.name : (customNote || 'Pelanggan Umum'),
+        cashierName: activeUser?.name || 'Kasir',
+        branchId: activeBranch === 'all' ? 'cabang-01' : activeBranch,
+        items: cart,
+        subtotal: cartSubtotal,
+        discount: cartDiscount,
+        tax: cartTax,
+        total: cartTotal,
+        status: 'Diproses Dapur'
+      };
+
+      setOpenBills(prev => [newBill, ...prev]);
+
+      // Set table status to 'Terisi' if Dine In
+      if (orderType === 'Dine In' && selectedTableObj) {
+        setTables(prev => prev.map(t => t.id === selectedTable ? { ...t, status: 'Terisi' } : t));
+      }
+
+      showToast(`Open Bill #${newBillNumber} Berhasil Disimpan`, 'success');
+    }
+
     clearCart();
-    showToast('Pesanan Berhasil Disimpan Sementara', 'info');
+    setActiveOpenBillId(null);
   };
 
-  const restoreCart = (holdId) => {
-    const target = heldCarts.find(h => h.id === holdId);
+  const restoreOpenBill = (billId) => {
+    const target = openBills.find(b => b.id === billId);
     if (target) {
-      setCart(target.cart);
-      setCartDiscount(target.discount);
-      setOrderType(target.orderType);
-      setSelectedTable(target.selectedTable);
-      setSelectedCustomer(target.selectedCustomer);
-      setHeldCarts(prev => prev.filter(h => h.id !== holdId));
-      setShowHoldCartModal(false);
-      showToast('Pesanan Berhasil Dipulihkan ke Keranjang', 'success');
+      setCart(target.items || target.cart || []);
+      setCartDiscount(target.discount || 0);
+      setOrderType(target.orderType || 'Dine In');
+      if (target.tableId) setSelectedTable(target.tableId);
+      if (target.customerId) setSelectedCustomer(target.customerId);
+      setActiveOpenBillId(target.id);
+      showToast(`Open Bill #${target.billNumber || target.id} Dimuat ke Keranjang`, 'info');
     }
   };
 
-  const deleteHeldCart = (holdId) => {
-    setHeldCarts(prev => prev.filter(h => h.id !== holdId));
-    showToast('Pesanan Tertunda Dihapus', 'warning');
+  const cancelOpenBill = (billId) => {
+    const target = openBills.find(b => b.id === billId);
+    if (!target) return;
+
+    setOpenBills(prev => prev.filter(b => b.id !== billId));
+
+    // Check if table has any other open bills
+    if (target.tableId) {
+      const remainingOnTable = openBills.filter(b => b.id !== billId && b.tableId === target.tableId);
+      if (remainingOnTable.length === 0) {
+        setTables(prev => prev.map(t => t.id === target.tableId ? { ...t, status: 'Kosong' } : t));
+      }
+    }
+
+    if (activeOpenBillId === billId) {
+      setActiveOpenBillId(null);
+      clearCart();
+    }
+
+    showToast(`Open Bill #${target.billNumber || billId} Telah Dibatalkan`, 'warning');
   };
+
+  const moveOpenBillTable = (billId, newTableId) => {
+    const targetBill = openBills.find(b => b.id === billId);
+    const newTableObj = tables.find(t => t.id === newTableId);
+    if (!targetBill || !newTableObj) return;
+
+    const oldTableId = targetBill.tableId;
+
+    // Update bill's table info
+    setOpenBills(prev => prev.map(b => {
+      if (b.id === billId) {
+        return {
+          ...b,
+          tableId: newTableId,
+          tableName: newTableObj.number,
+          orderType: 'Dine In'
+        };
+      }
+      return b;
+    }));
+
+    // Update new table status to 'Terisi'
+    setTables(prev => prev.map(t => t.id === newTableId ? { ...t, status: 'Terisi' } : t));
+
+    // Check if old table has other open bills
+    if (oldTableId && oldTableId !== newTableId) {
+      const remainingOnOld = openBills.filter(b => b.id !== billId && b.tableId === oldTableId);
+      if (remainingOnOld.length === 0) {
+        setTables(prev => prev.map(t => t.id === oldTableId ? { ...t, status: 'Kosong' } : t));
+      }
+    }
+
+    showToast(`Open Bill #${targetBill.billNumber || billId} Berhasil Dipindah ke ${newTableObj.number}`, 'success');
+  };
+
+  const mergeOpenBills = (sourceBillId, targetBillId) => {
+    const source = openBills.find(b => b.id === sourceBillId);
+    const target = openBills.find(b => b.id === targetBillId);
+    if (!source || !target) return;
+
+    // Merge items
+    const mergedItems = [...(target.items || []), ...(source.items || [])];
+    const newSubtotal = mergedItems.reduce((s, i) => s + (i.price * i.qty), 0);
+    const newTax = Math.round((newSubtotal - target.discount) * 0.1);
+    const newTotal = Math.max(0, newSubtotal - target.discount + newTax);
+
+    setOpenBills(prev => prev.filter(b => b.id !== sourceBillId).map(b => {
+      if (b.id === targetBillId) {
+        return {
+          ...b,
+          items: mergedItems,
+          subtotal: newSubtotal,
+          tax: newTax,
+          total: newTotal
+        };
+      }
+      return b;
+    }));
+
+    // Check source table status
+    if (source.tableId && source.tableId !== target.tableId) {
+      const remainingOnSource = openBills.filter(b => b.id !== sourceBillId && b.tableId === source.tableId);
+      if (remainingOnSource.length === 0) {
+        setTables(prev => prev.map(t => t.id === source.tableId ? { ...t, status: 'Kosong' } : t));
+      }
+    }
+
+    showToast(`Bill #${source.billNumber || source.id} Digabungkan ke #${target.billNumber || target.id}`, 'success');
+  };
+
+  // Aliases for backward compatibility
+  const holdCart = saveOpenBill;
+  const holdCurrentCart = saveOpenBill;
+  const restoreCart = restoreOpenBill;
+  const deleteHeldCart = cancelOpenBill;
 
   // Process Checkout Payment
   const processPayment = async (paymentDetails) => {
@@ -521,7 +725,8 @@ export const PosProvider = ({ children }) => {
       amountPaid: paymentDetails.amountPaid,
       change: Math.max(0, paymentDetails.amountPaid - cartTotal),
       status: 'PROSES',
-      paymentStatus: 'LUNAS'
+      paymentStatus: 'LUNAS',
+      autoPrint: paymentDetails.autoPrint || false
     };
 
     // Update Local Stock
@@ -542,9 +747,21 @@ export const PosProvider = ({ children }) => {
       })
     );
 
-    // Update Table Status
-    if (orderType === 'Dine In' && selectedTableObj) {
-      setTables(prev => prev.map(t => t.id === selectedTable ? { ...t, status: 'Terisi' } : t));
+    // If an active Open Bill was paid, remove it and free table
+    if (activeOpenBillId) {
+      const paidBill = openBills.find(b => b.id === activeOpenBillId);
+      setOpenBills(prev => prev.filter(b => b.id !== activeOpenBillId));
+
+      if (paidBill && paidBill.tableId) {
+        const otherBillsOnTable = openBills.filter(b => b.id !== activeOpenBillId && b.tableId === paidBill.tableId);
+        if (otherBillsOnTable.length === 0) {
+          setTables(prev => prev.map(t => t.id === paidBill.tableId ? { ...t, status: 'Kosong' } : t));
+        }
+      }
+      setActiveOpenBillId(null);
+    } else if (orderType === 'Dine In' && selectedTableObj) {
+      // If direct checkout Dine In table, free table
+      setTables(prev => prev.map(t => t.id === selectedTable ? { ...t, status: 'Kosong' } : t));
     }
 
     // Update Transactions & Sync Firebase
@@ -764,7 +981,10 @@ export const PosProvider = ({ children }) => {
       selectedCustomer, setSelectedCustomer,
       cart, addToCart, updateCartQty, updateItemNotes, clearCart,
       cartSubtotal, cartDiscount, setCartDiscount, cartTax, cartTotal,
-      heldCarts, holdCart, restoreCart, deleteHeldCart,
+      openBills, activeOpenBillId, setActiveOpenBillId,
+      saveOpenBill, restoreOpenBill, cancelOpenBill, moveOpenBillTable, mergeOpenBills,
+      showPreBillModal, setShowPreBillModal, selectedPreBill, setSelectedPreBill,
+      heldCarts, holdCart, holdCurrentCart: saveOpenBill, restoreCart, deleteHeldCart,
       pendingSelfOrders, submitCustomerOrder, approveCustomerOrder, rejectCustomerOrder,
       transactions, processPayment, refundTransaction, resetBranchTransactions, updateStationItemStatus, updateOrderItemStatus: updateStationItemStatus,
       showPaymentModal, setShowPaymentModal,

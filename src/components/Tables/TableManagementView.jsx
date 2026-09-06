@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { usePos } from '../../context/PosContext';
-import { QrCode, Plus, Edit, Trash2, Printer, CheckCircle, AlertTriangle, Users, Sparkles, ExternalLink } from 'lucide-react';
+import { QrCode, Plus, Edit, Trash2, Printer, CheckCircle, AlertTriangle, Users, Sparkles, ExternalLink, Receipt, CreditCard } from 'lucide-react';
 
 export default function TableManagementView() {
-  const { tables, addTable, updateTable, deleteTable, activeBranch, branches, setActiveTab } = usePos();
+  const { 
+    tables, addTable, updateTable, deleteTable, activeBranch, branches, setActiveTab,
+    openBills, restoreOpenBill, setShowHoldCartModal, setShowPaymentModal
+  } = usePos();
   const [filterType, setFilterType] = useState('ALL'); // 'ALL' | 'Reguler' | 'VIP'
   const [showModal, setShowModal] = useState(false);
   const [editingTable, setEditingTable] = useState(null);
@@ -194,6 +197,43 @@ export default function TableManagementView() {
               </div>
 
               {/* Action Buttons */}
+              {/* Occupied Open Bill Banner */}
+              {isOccupied && (() => {
+                const tableOpenBill = openBills.find(b => b.tableId === t.id);
+                return (
+                  <div style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                    border: '1px solid rgba(239, 68, 68, 0.2)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '8px 10px',
+                    fontSize: '0.78rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--danger)' }}>
+                      <span>Bill: #{tableOpenBill?.billNumber || 'TERBUIK'}</span>
+                      <span>{tableOpenBill ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(tableOpenBill.total) : ''}</span>
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      👤 {tableOpenBill?.customerName || 'Pelanggan'} • {tableOpenBill?.items?.length || 0} Item
+                    </div>
+                    <button 
+                      className="btn btn-primary btn-sm"
+                      style={{ marginTop: '4px', fontSize: '0.75rem', padding: '4px 8px', justifyContent: 'center' }}
+                      onClick={() => {
+                        if (tableOpenBill) restoreOpenBill(tableOpenBill.id);
+                        setActiveTab('pos');
+                      }}
+                    >
+                      <Receipt size={13} />
+                      <span>Lihat & Kasir Bill Meja</span>
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* Action Toolbar */}
               <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
                 <button 
                   className="btn btn-secondary btn-sm"
