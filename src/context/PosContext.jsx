@@ -315,16 +315,17 @@ export const PosProvider = ({ children }) => {
       if (!silent) showToast('Semua data awal berhasil dimasukkan ke Firebase Firestore!', 'success');
     } catch (err) {
       console.error('Firebase seeding error:', err);
-      if (!silent) showToast('Gagal upload data ke Firebase: ' + err.message, 'danger');
+      if (err.code === 'permission-denied' || err.message?.includes('permission')) {
+        showToast('⚠️ Firestore Ditolak! Harap buka Firebase Console -> Rules -> Ubah "allow read, write: if true;"', 'danger');
+      } else {
+        showToast('⚠️ Gagal upload ke Firebase: ' + err.message, 'danger');
+      }
     }
   };
 
   // Firebase Realtime Listener Sync (Firestore) - FULL FIREBASE ENGINE
   useEffect(() => {
     if (!db) return;
-
-    // Trigger full initial seed on startup
-    seedAllDataToFirebase(true);
 
     const syncCol = (colName, setState, initialData) => {
       return onSnapshot(collection(db, colName), (snapshot) => {
@@ -334,11 +335,21 @@ export const PosProvider = ({ children }) => {
         } else if (initialData && initialData.length > 0) {
           // Auto-seed initial data to Firestore if collection is empty
           initialData.forEach(item => {
-            setDoc(doc(db, colName, item.id), item, { merge: true }).catch(e => console.log(`Initial seed ${colName} notice:`, e.message));
+            setDoc(doc(db, colName, item.id), item, { merge: true }).catch(e => {
+              console.log(`Initial seed ${colName} notice:`, e.message);
+              if (e.code === 'permission-denied') {
+                showToast(`⚠️ Firestore rules menolak nulis di ${colName}. Set Rules "allow read, write: if true;"`, 'danger');
+              }
+            });
           });
         }
       }, (err) => {
-        console.log(`Firebase ${colName} Sync Notice:`, err.message);
+        console.log(`Firebase ${colName} Sync Error:`, err.message);
+        if (err.code === 'permission-denied') {
+          showToast('⚠️ Firestore Rule Locked! Buka Firebase Console -> Rules -> Set allow read, write: if true;', 'warning');
+        } else if (err.code === 'not-found' || err.message?.includes('not used in project')) {
+          showToast('⚠️ Firestore Database belum dibuat di Firebase Console! Buka Build -> Firestore Database -> Create Database', 'danger');
+        }
       });
     };
 
