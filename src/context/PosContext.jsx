@@ -202,9 +202,129 @@ export const PosProvider = ({ children }) => {
   const [activeReceipt, setActiveReceipt] = useState(null);
   const [toasts, setToasts] = useState([]);
 
+  // Explicit Seeding Function to push all existing initial data to Firebase Firestore
+  const seedAllDataToFirebase = async (silent = false) => {
+    if (!db) return;
+    try {
+      if (!silent) showToast('Mengunggah data ke Firebase...', 'info');
+
+      // 1. Branches
+      for (const item of INITIAL_BRANCHES) {
+        await setDoc(doc(db, 'branches', item.id), item, { merge: true });
+      }
+      // 2. Categories
+      for (const item of INITIAL_CATEGORIES) {
+        await setDoc(doc(db, 'categories', item.id), item, { merge: true });
+      }
+      // 3. Products
+      for (const item of INITIAL_PRODUCTS) {
+        await setDoc(doc(db, 'products', item.id), item, { merge: true });
+      }
+      // 4. Tables
+      for (const item of INITIAL_TABLES) {
+        await setDoc(doc(db, 'tables', item.id), item, { merge: true });
+      }
+      // 5. Customers
+      for (const item of INITIAL_CUSTOMERS) {
+        await setDoc(doc(db, 'customers', item.id), item, { merge: true });
+      }
+      // 6. Users
+      for (const item of INITIAL_USERS) {
+        await setDoc(doc(db, 'users', item.id), item, { merge: true });
+      }
+      // 7. Transactions
+      for (const item of INITIAL_TRANSACTIONS) {
+        await setDoc(doc(db, 'transactions', item.id), item, { merge: true });
+      }
+
+      // 8. Open Bills
+      const defaultBills = [
+        {
+          id: 'BILL-1001',
+          billNumber: 'BILL-1001',
+          time: new Date(Date.now() - 900000).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+          createdAt: new Date(Date.now() - 900000).toISOString(),
+          orderType: 'Dine In',
+          tableId: 'tbl-01',
+          tableName: 'Meja 01',
+          customerId: 'cust-general',
+          customerName: 'Bpk. Hendra (Meja 01)',
+          cashierName: 'Ahmad Kasir',
+          branchId: 'cabang-01',
+          items: [
+            { id: 'prod-001', name: 'Nasi Goreng Spesial Nusa Cafe', price: 28000, qty: 2, subtotal: 56000, station: 'Dapur', notes: 'Tidak pedas' },
+            { id: 'prod-008', name: 'Kopi Susu Gula Aren Nusa', price: 22000, qty: 2, subtotal: 44000, station: 'Bar', notes: 'Less Ice' }
+          ],
+          subtotal: 100000,
+          discount: 0,
+          tax: 10000,
+          total: 110000,
+          status: 'Diproses Dapur'
+        },
+        {
+          id: 'BILL-1002',
+          billNumber: 'BILL-1002',
+          time: new Date(Date.now() - 1800000).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+          createdAt: new Date(Date.now() - 1800000).toISOString(),
+          orderType: 'Dine In',
+          tableId: 'tbl-02',
+          tableName: 'Meja 02',
+          customerId: 'cust-general',
+          customerName: 'Ibu Siska (Meja 02)',
+          cashierName: 'Ahmad Kasir',
+          branchId: 'cabang-01',
+          items: [
+            { id: 'prod-002', name: 'Ayam Bakar Madu + Nasi', price: 32000, qty: 3, subtotal: 96000, station: 'Dapur', notes: 'Sambal terpisah' },
+            { id: 'prod-009', name: 'Es Teh Manis Jumbo', price: 8000, qty: 3, subtotal: 24000, station: 'Bar', notes: '' }
+          ],
+          subtotal: 120000,
+          discount: 10000,
+          tax: 11000,
+          total: 121000,
+          status: 'Diproses Dapur'
+        }
+      ];
+      for (const item of defaultBills) {
+        await setDoc(doc(db, 'open_bills', item.id), item, { merge: true });
+      }
+
+      // 9. Pending Self Orders
+      const defaultSelfOrders = [
+        {
+          id: 'QR-ORD-101',
+          time: new Date(Date.now() - 300000).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+          date: new Date(Date.now() - 300000).toISOString(),
+          customerName: 'Bambang (Scan QR)',
+          tableName: 'Meja 03',
+          orderType: 'Dine In',
+          branchId: 'cabang-01',
+          items: [
+            { id: 'prod-001', sku: 'CF-MKN-01', name: 'Nasi Goreng Spesial Nusa Cafe', price: 28000, qty: 1, subtotal: 28000, station: 'Dapur', notes: 'Extra Pedas' },
+            { id: 'prod-008', sku: 'CF-COF-01', name: 'Kopi Susu Gula Aren Nusa', price: 22000, qty: 1, subtotal: 22000, station: 'Bar', notes: 'Less Ice' }
+          ],
+          subtotal: 50000,
+          tax: 5000,
+          total: 55000,
+          status: 'MENUNGGU_KONFIRMASI'
+        }
+      ];
+      for (const item of defaultSelfOrders) {
+        await setDoc(doc(db, 'pending_self_orders', item.id), item, { merge: true });
+      }
+
+      if (!silent) showToast('Semua data awal berhasil dimasukkan ke Firebase Firestore!', 'success');
+    } catch (err) {
+      console.error('Firebase seeding error:', err);
+      if (!silent) showToast('Gagal upload data ke Firebase: ' + err.message, 'danger');
+    }
+  };
+
   // Firebase Realtime Listener Sync (Firestore) - FULL FIREBASE ENGINE
   useEffect(() => {
     if (!db) return;
+
+    // Trigger full initial seed on startup
+    seedAllDataToFirebase(true);
 
     const syncCol = (colName, setState, initialData) => {
       return onSnapshot(collection(db, colName), (snapshot) => {
@@ -214,7 +334,7 @@ export const PosProvider = ({ children }) => {
         } else if (initialData && initialData.length > 0) {
           // Auto-seed initial data to Firestore if collection is empty
           initialData.forEach(item => {
-            setDoc(doc(db, colName, item.id), item).catch(e => console.log(`Initial seed ${colName} notice:`, e.message));
+            setDoc(doc(db, colName, item.id), item, { merge: true }).catch(e => console.log(`Initial seed ${colName} notice:`, e.message));
           });
         }
       }, (err) => {
@@ -1096,6 +1216,7 @@ export const PosProvider = ({ children }) => {
       showPaymentModal, setShowPaymentModal,
       showHoldCartModal, setShowHoldCartModal,
       activeReceipt, setActiveReceipt,
+      seedAllDataToFirebase,
       toasts, showToast
     }}>
       {children}
