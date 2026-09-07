@@ -202,44 +202,46 @@ export const PosProvider = ({ children }) => {
   const [activeReceipt, setActiveReceipt] = useState(null);
   const [toasts, setToasts] = useState([]);
 
-  // Firebase Realtime Listener Sync (Firestore)
+  // Firebase Realtime Listener Sync (Firestore) - FULL FIREBASE ENGINE
   useEffect(() => {
     if (!db) return;
 
-    // Listen to Firebase Products
-    const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
-      if (!snapshot.empty) {
-        const firebaseProds = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        setProducts(firebaseProds);
-      }
-    }, (err) => {
-      console.log('Firebase Products Sync Notice:', err.message);
-    });
+    const syncCol = (colName, setState, initialData) => {
+      return onSnapshot(collection(db, colName), (snapshot) => {
+        if (!snapshot.empty) {
+          const dataList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+          setState(dataList);
+        } else if (initialData && initialData.length > 0) {
+          // Auto-seed initial data to Firestore if collection is empty
+          initialData.forEach(item => {
+            setDoc(doc(db, colName, item.id), item).catch(e => console.log(`Initial seed ${colName} notice:`, e.message));
+          });
+        }
+      }, (err) => {
+        console.log(`Firebase ${colName} Sync Notice:`, err.message);
+      });
+    };
 
-    // Listen to Firebase Transactions
-    const unsubTrx = onSnapshot(collection(db, 'transactions'), (snapshot) => {
-      if (!snapshot.empty) {
-        const firebaseTrx = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        setTransactions(firebaseTrx);
-      }
-    }, (err) => {
-      console.log('Firebase Transactions Sync Notice:', err.message);
-    });
-
-    // Listen to Firebase Self Orders
-    const unsubSelfOrders = onSnapshot(collection(db, 'pending_self_orders'), (snapshot) => {
-      if (!snapshot.empty) {
-        const firebaseSelfOrders = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        setPendingSelfOrders(firebaseSelfOrders);
-      }
-    }, (err) => {
-      console.log('Firebase Self Orders Sync Notice:', err.message);
-    });
+    const unsubBranches = syncCol('branches', setBranches, INITIAL_BRANCHES);
+    const unsubCategories = syncCol('categories', setCategories, INITIAL_CATEGORIES);
+    const unsubProducts = syncCol('products', setProducts, INITIAL_PRODUCTS);
+    const unsubTables = syncCol('tables', setTables, INITIAL_TABLES);
+    const unsubCustomers = syncCol('customers', setCustomers, INITIAL_CUSTOMERS);
+    const unsubUsers = syncCol('users', setUsers, INITIAL_USERS);
+    const unsubOpenBills = syncCol('open_bills', setOpenBills, null);
+    const unsubPendingOrders = syncCol('pending_self_orders', setPendingSelfOrders, null);
+    const unsubTrx = syncCol('transactions', setTransactions, INITIAL_TRANSACTIONS);
 
     return () => {
+      unsubBranches();
+      unsubCategories();
       unsubProducts();
+      unsubTables();
+      unsubCustomers();
+      unsubUsers();
+      unsubOpenBills();
+      unsubPendingOrders();
       unsubTrx();
-      unsubSelfOrders();
     };
   }, []);
 
@@ -324,17 +326,27 @@ export const PosProvider = ({ children }) => {
   };
 
   // Categories CRUD
-  const addCategory = (categoryData) => {
+  const addCategory = async (categoryData) => {
     const newCat = {
       id: categoryData.name.toLowerCase().replace(/\s+/g, '-'),
       ...categoryData
     };
     setCategories(prev => [...prev, newCat]);
+    try {
+      if (db) await setDoc(doc(db, 'categories', newCat.id), newCat);
+    } catch (e) {
+      console.log('Firebase add category:', e);
+    }
     showToast(`Kategori ${newCat.name} Ditambahkan`, 'success');
   };
 
-  const deleteCategory = (catId) => {
+  const deleteCategory = async (catId) => {
     setCategories(prev => prev.filter(c => c.id !== catId));
+    try {
+      if (db) await deleteDoc(doc(db, 'categories', catId));
+    } catch (e) {
+      console.log('Firebase delete category:', e);
+    }
     showToast('Kategori Dihapus', 'warning');
   };
 
@@ -348,7 +360,7 @@ export const PosProvider = ({ children }) => {
     setProducts(prev => [newProd, ...prev]);
 
     try {
-      await setDoc(doc(db, 'products', newProd.id), newProd);
+      if (db) await setDoc(doc(db, 'products', newProd.id), newProd);
     } catch (e) {
       console.log('Firebase add product:', e);
     }
@@ -360,7 +372,7 @@ export const PosProvider = ({ children }) => {
     setProducts(prev => prev.map(p => p.id === updatedProd.id ? updatedProd : p));
 
     try {
-      await updateDoc(doc(db, 'products', updatedProd.id), updatedProd);
+      if (db) await updateDoc(doc(db, 'products', updatedProd.id), updatedProd);
     } catch (e) {
       console.log('Firebase update product:', e);
     }
@@ -372,7 +384,7 @@ export const PosProvider = ({ children }) => {
     setProducts(prev => prev.filter(p => p.id !== productId));
 
     try {
-      await deleteDoc(doc(db, 'products', productId));
+      if (db) await deleteDoc(doc(db, 'products', productId));
     } catch (e) {
       console.log('Firebase delete product:', e);
     }
@@ -381,59 +393,99 @@ export const PosProvider = ({ children }) => {
   };
 
   // Tables CRUD
-  const addTable = (tableData) => {
+  const addTable = async (tableData) => {
     const newTable = {
       id: `tbl-${Date.now()}`,
       ...tableData,
       qrCode: `QR-MEJA-${tableData.number.replace(/\s+/g, '')}`
     };
     setTables(prev => [...prev, newTable]);
+    try {
+      if (db) await setDoc(doc(db, 'tables', newTable.id), newTable);
+    } catch (e) {
+      console.log('Firebase add table:', e);
+    }
     showToast(`${newTable.number} Ditambahkan`, 'success');
   };
 
-  const updateTable = (updatedTable) => {
+  const updateTable = async (updatedTable) => {
     setTables(prev => prev.map(t => t.id === updatedTable.id ? updatedTable : t));
+    try {
+      if (db) await setDoc(doc(db, 'tables', updatedTable.id), updatedTable);
+    } catch (e) {
+      console.log('Firebase update table:', e);
+    }
     showToast(`${updatedTable.number} Diperbarui`, 'success');
   };
 
-  const deleteTable = (tableId) => {
+  const deleteTable = async (tableId) => {
     setTables(prev => prev.filter(t => t.id !== tableId));
+    try {
+      if (db) await deleteDoc(doc(db, 'tables', tableId));
+    } catch (e) {
+      console.log('Firebase delete table:', e);
+    }
     showToast('Meja Dihapus', 'warning');
   };
 
   // Customers CRUD
-  const addCustomer = (customerData) => {
+  const addCustomer = async (customerData) => {
     const newCust = {
       id: `cust-${Date.now()}`,
       ...customerData,
       ordersCount: 0
     };
     setCustomers(prev => [...prev, newCust]);
+    try {
+      if (db) await setDoc(doc(db, 'customers', newCust.id), newCust);
+    } catch (e) {
+      console.log('Firebase add customer:', e);
+    }
     showToast(`Pelanggan ${newCust.name} Ditambahkan`, 'success');
   };
 
-  const updateCustomer = (updatedCust) => {
+  const updateCustomer = async (updatedCust) => {
     setCustomers(prev => prev.map(c => c.id === updatedCust.id ? updatedCust : c));
+    try {
+      if (db) await setDoc(doc(db, 'customers', updatedCust.id), updatedCust);
+    } catch (e) {
+      console.log('Firebase update customer:', e);
+    }
     showToast(`Pelanggan ${updatedCust.name} Diperbarui`, 'success');
   };
 
-  const deleteCustomer = (custId) => {
+  const deleteCustomer = async (custId) => {
     setCustomers(prev => prev.filter(c => c.id !== custId));
+    try {
+      if (db) await deleteDoc(doc(db, 'customers', custId));
+    } catch (e) {
+      console.log('Firebase delete customer:', e);
+    }
     showToast('Data Pelanggan Dihapus', 'warning');
   };
 
   // Users CRUD
-  const addUser = (userData) => {
+  const addUser = async (userData) => {
     const newUser = {
       id: `user-${Date.now()}`,
       ...userData
     };
     setUsers(prev => [...prev, newUser]);
+    try {
+      if (db) await setDoc(doc(db, 'users', newUser.id), newUser);
+    } catch (e) {
+      console.log('Firebase add user:', e);
+    }
     showToast(`Staf ${newUser.name} Ditambahkan`, 'success');
   };
 
-  const deleteUser = (userId) => {
+  const deleteUser = async (userId) => {
     setUsers(prev => prev.filter(u => u.id !== userId));
+    try {
+      if (db) await deleteDoc(doc(db, 'users', userId));
+    } catch (e) {
+      console.log('Firebase delete user:', e);
+    }
     showToast('Pengguna Dihapus', 'warning');
   };
 
@@ -508,8 +560,8 @@ export const PosProvider = ({ children }) => {
   const cartTax = Math.round((cartSubtotal - cartDiscount) * 0.1);
   const cartTotal = Math.max(0, cartSubtotal - cartDiscount + cartTax);
 
-  // Open Bill Helpers
-  const saveOpenBill = (customNote = '') => {
+  // Open Bill Helpers - FULL FIREBASE SYNC
+  const saveOpenBill = async (customNote = '') => {
     if (cart.length === 0) return;
 
     const selectedTableObj = tables.find(t => t.id === selectedTable);
@@ -518,35 +570,37 @@ export const PosProvider = ({ children }) => {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
+    let billToSave = null;
+
     if (activeOpenBillId) {
       // Update existing Open Bill
-      setOpenBills(prev => prev.map(bill => {
-        if (bill.id === activeOpenBillId) {
-          return {
-            ...bill,
-            updatedAt: now.toISOString(),
-            time: timeStr,
-            items: cart,
-            subtotal: cartSubtotal,
-            discount: cartDiscount,
-            tax: cartTax,
-            total: cartTotal,
-            orderType,
-            tableId: selectedTable,
-            tableName: selectedTableObj ? selectedTableObj.number : 'Take Away',
-            customerId: selectedCustomer,
-            customerName: selectedCustObj ? selectedCustObj.name : 'Pelanggan Umum',
-            cashierName: activeUser?.name || 'Kasir',
-            notes: customNote || bill.notes || ''
-          };
-        }
-        return bill;
-      }));
+      const existing = openBills.find(b => b.id === activeOpenBillId) || {};
+      billToSave = {
+        ...existing,
+        id: activeOpenBillId,
+        billNumber: existing.billNumber || activeOpenBillId,
+        updatedAt: now.toISOString(),
+        time: timeStr,
+        items: cart,
+        subtotal: cartSubtotal,
+        discount: cartDiscount,
+        tax: cartTax,
+        total: cartTotal,
+        orderType,
+        tableId: selectedTable,
+        tableName: selectedTableObj ? selectedTableObj.number : 'Take Away',
+        customerId: selectedCustomer,
+        customerName: selectedCustObj ? selectedCustObj.name : 'Pelanggan Umum',
+        cashierName: activeUser?.name || 'Kasir',
+        notes: customNote || existing.notes || ''
+      };
+
+      setOpenBills(prev => prev.map(b => b.id === activeOpenBillId ? billToSave : b));
       showToast(`Open Bill #${activeOpenBillId} Berhasil Diperbarui`, 'success');
     } else {
       // Create New Open Bill
       const newBillNumber = `BILL-${Math.floor(1000 + Math.random() * 9000)}`;
-      const newBill = {
+      billToSave = {
         id: newBillNumber,
         billNumber: newBillNumber,
         time: timeStr,
@@ -567,14 +621,24 @@ export const PosProvider = ({ children }) => {
         status: 'Diproses Dapur'
       };
 
-      setOpenBills(prev => [newBill, ...prev]);
+      setOpenBills(prev => [billToSave, ...prev]);
 
       // Set table status to 'Terisi' if Dine In
       if (orderType === 'Dine In' && selectedTableObj) {
-        setTables(prev => prev.map(t => t.id === selectedTable ? { ...t, status: 'Terisi' } : t));
+        const updatedTbl = { ...selectedTableObj, status: 'Terisi' };
+        setTables(prev => prev.map(t => t.id === selectedTable ? updatedTbl : t));
+        if (db) setDoc(doc(db, 'tables', selectedTable), updatedTbl).catch(e => console.log('Firebase table status sync:', e));
       }
 
       showToast(`Open Bill #${newBillNumber} Berhasil Disimpan`, 'success');
+    }
+
+    try {
+      if (db && billToSave) {
+        await setDoc(doc(db, 'open_bills', billToSave.id), billToSave);
+      }
+    } catch (e) {
+      console.log('Firebase save open bill:', e);
     }
 
     clearCart();
@@ -594,17 +658,28 @@ export const PosProvider = ({ children }) => {
     }
   };
 
-  const cancelOpenBill = (billId) => {
+  const cancelOpenBill = async (billId) => {
     const target = openBills.find(b => b.id === billId);
     if (!target) return;
 
     setOpenBills(prev => prev.filter(b => b.id !== billId));
 
+    try {
+      if (db) await deleteDoc(doc(db, 'open_bills', billId));
+    } catch (e) {
+      console.log('Firebase delete open bill:', e);
+    }
+
     // Check if table has any other open bills
     if (target.tableId) {
       const remainingOnTable = openBills.filter(b => b.id !== billId && b.tableId === target.tableId);
       if (remainingOnTable.length === 0) {
-        setTables(prev => prev.map(t => t.id === target.tableId ? { ...t, status: 'Kosong' } : t));
+        const targetTableObj = tables.find(t => t.id === target.tableId);
+        if (targetTableObj) {
+          const freedTbl = { ...targetTableObj, status: 'Kosong' };
+          setTables(prev => prev.map(t => t.id === target.tableId ? freedTbl : t));
+          if (db) setDoc(doc(db, 'tables', target.tableId), freedTbl).catch(e => console.log('Firebase table free:', e));
+        }
       }
     }
 
@@ -616,41 +691,49 @@ export const PosProvider = ({ children }) => {
     showToast(`Open Bill #${target.billNumber || billId} Telah Dibatalkan`, 'warning');
   };
 
-  const moveOpenBillTable = (billId, newTableId) => {
+  const moveOpenBillTable = async (billId, newTableId) => {
     const targetBill = openBills.find(b => b.id === billId);
     const newTableObj = tables.find(t => t.id === newTableId);
     if (!targetBill || !newTableObj) return;
 
     const oldTableId = targetBill.tableId;
+    const updatedBill = {
+      ...targetBill,
+      tableId: newTableId,
+      tableName: newTableObj.number,
+      orderType: 'Dine In'
+    };
 
     // Update bill's table info
-    setOpenBills(prev => prev.map(b => {
-      if (b.id === billId) {
-        return {
-          ...b,
-          tableId: newTableId,
-          tableName: newTableObj.number,
-          orderType: 'Dine In'
-        };
-      }
-      return b;
-    }));
+    setOpenBills(prev => prev.map(b => b.id === billId ? updatedBill : b));
+    try {
+      if (db) await setDoc(doc(db, 'open_bills', billId), updatedBill);
+    } catch (e) {
+      console.log('Firebase move open bill table:', e);
+    }
 
     // Update new table status to 'Terisi'
-    setTables(prev => prev.map(t => t.id === newTableId ? { ...t, status: 'Terisi' } : t));
+    const newTblUpdated = { ...newTableObj, status: 'Terisi' };
+    setTables(prev => prev.map(t => t.id === newTableId ? newTblUpdated : t));
+    if (db) setDoc(doc(db, 'tables', newTableId), newTblUpdated).catch(e => console.log('Firebase new table status:', e));
 
     // Check if old table has other open bills
     if (oldTableId && oldTableId !== newTableId) {
       const remainingOnOld = openBills.filter(b => b.id !== billId && b.tableId === oldTableId);
       if (remainingOnOld.length === 0) {
-        setTables(prev => prev.map(t => t.id === oldTableId ? { ...t, status: 'Kosong' } : t));
+        const oldTableObj = tables.find(t => t.id === oldTableId);
+        if (oldTableObj) {
+          const oldTblFreed = { ...oldTableObj, status: 'Kosong' };
+          setTables(prev => prev.map(t => t.id === oldTableId ? oldTblFreed : t));
+          if (db) setDoc(doc(db, 'tables', oldTableId), oldTblFreed).catch(e => console.log('Firebase old table free:', e));
+        }
       }
     }
 
     showToast(`Open Bill #${targetBill.billNumber || billId} Berhasil Dipindah ke ${newTableObj.number}`, 'success');
   };
 
-  const mergeOpenBills = (sourceBillId, targetBillId) => {
+  const mergeOpenBills = async (sourceBillId, targetBillId) => {
     const source = openBills.find(b => b.id === sourceBillId);
     const target = openBills.find(b => b.id === targetBillId);
     if (!source || !target) return;
@@ -661,26 +744,40 @@ export const PosProvider = ({ children }) => {
     const newTax = Math.round((newSubtotal - target.discount) * 0.1);
     const newTotal = Math.max(0, newSubtotal - target.discount + newTax);
 
-    setOpenBills(prev => prev.filter(b => b.id !== sourceBillId).map(b => {
-      if (b.id === targetBillId) {
-        return {
-          ...b,
-          items: mergedItems,
-          subtotal: newSubtotal,
-          tax: newTax,
-          total: newTotal
-        };
+    const mergedBill = {
+      ...target,
+      items: mergedItems,
+      subtotal: newSubtotal,
+      tax: newTax,
+      total: newTotal
+    };
+
+    setOpenBills(prev => prev.filter(b => b.id !== sourceBillId).map(b => b.id === targetBillId ? mergedBill : b));
+
+    try {
+      if (db) {
+        await setDoc(doc(db, 'open_bills', targetBillId), mergedBill);
+        await deleteDoc(doc(db, 'open_bills', sourceBillId));
       }
-      return b;
-    }));
+    } catch (e) {
+      console.log('Firebase merge open bills:', e);
+    }
 
     // Check source table status
     if (source.tableId && source.tableId !== target.tableId) {
       const remainingOnSource = openBills.filter(b => b.id !== sourceBillId && b.tableId === source.tableId);
       if (remainingOnSource.length === 0) {
-        setTables(prev => prev.map(t => t.id === source.tableId ? { ...t, status: 'Kosong' } : t));
+        const sourceTblObj = tables.find(t => t.id === source.tableId);
+        if (sourceTblObj) {
+          const sourceTblFreed = { ...sourceTblObj, status: 'Kosong' };
+          setTables(prev => prev.map(t => t.id === source.tableId ? sourceTblFreed : t));
+          if (db) setDoc(doc(db, 'tables', source.tableId), sourceTblFreed).catch(e => console.log('Firebase source table free:', e));
+        }
       }
     }
+
+    showToast(`Bill #${source.billNumber || source.id} Digabungkan ke #${target.billNumber || target.id}`, 'success');
+  };
 
     showToast(`Bill #${source.billNumber || source.id} Digabungkan ke #${target.billNumber || target.id}`, 'success');
   };
