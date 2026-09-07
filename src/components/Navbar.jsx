@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { usePos } from '../context/PosContext';
-import { ShoppingBag, Sun, Moon, Clock, UserCheck, PauseCircle, Building2, ShieldAlert, QrCode, LogOut, Receipt } from 'lucide-react';
+import { ShoppingBag, Sun, Moon, Clock, UserCheck, PauseCircle, Building2, ShieldAlert, QrCode, LogOut, Receipt, Cloud } from 'lucide-react';
 
 export default function Navbar() {
   const { 
@@ -12,7 +12,8 @@ export default function Navbar() {
     activeUser,
     logoutUser,
     pendingSelfOrders,
-    setActiveTab
+    setActiveTab,
+    seedAllDataToFirebase
   } = usePos();
 
   const [time, setTime] = useState(new Date().toLocaleTimeString('id-ID'));
@@ -40,6 +41,17 @@ export default function Navbar() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        {/* Firebase Sync Button */}
+        <button 
+          className="btn btn-secondary btn-sm"
+          onClick={() => seedAllDataToFirebase(false)}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.3)' }}
+          title="Upload / Sync Data ke Firebase Firestore"
+        >
+          <Cloud size={15} />
+          <span style={{ fontWeight: 600 }}>Sync Firebase</span>
+        </button>
+
         {/* Open Bills Quick Access */}
         <button 
           className="btn btn-secondary btn-sm"

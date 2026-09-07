@@ -327,6 +327,9 @@ export const PosProvider = ({ children }) => {
   useEffect(() => {
     if (!db) return;
 
+    // Automatically push all data to Firebase Firestore
+    seedAllDataToFirebase(false);
+
     const syncCol = (colName, setState, initialData) => {
       return onSnapshot(collection(db, colName), (snapshot) => {
         if (!snapshot.empty) {
